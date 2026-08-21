@@ -1,0 +1,31 @@
+# Unreal generated files
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+*.VC.db
+*.VC.opendb
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.tmp
+*.log
+Content/Python/__pycache__/
+
+# Build artifacts are generated locally
+Artifacts/Driftstead_Demo_Win64/
+Artifacts/Driftstead_Demo_Win64.zip
+Artifacts/Logs/*.log
+Artifacts/Logs/*.json
+Artifacts/AutomationReports/
+Artifacts/Screenshots/*.png
+
+# IDE and OS files
+.idea/
+.vscode/
+*.code-workspace
+Thumbs.db
+Desktop.ini
+.DS_Store
