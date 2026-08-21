@@ -37,6 +37,7 @@ private:
     UPROPERTY() TObjectPtr<ARaftManager> RaftManager;
     UPROPERTY() TObjectPtr<ADriftItemSpawner> ItemSpawner;
     UPROPERTY() TObjectPtr<AActor> SmokeTarget;
+    UPROPERTY() TObjectPtr<AActor> SmokeDecoy;
     int32 SmokeStep = 0;
     int32 SmokeWaitTicks = 0;
     int32 SmokeInitialDriftwood = 0;

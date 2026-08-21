@@ -12,11 +12,11 @@ AHookActor::AHookActor()
     Collision = CreateDefaultSubobject<USphereComponent>(TEXT("HookCollision"));
     Collision->InitSphereRadius(56.0f);
     Collision->SetCollisionObjectType(ECC_WorldDynamic);
-    Collision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    // Catch selection is centralized in UHookComponent's planar sweep so a
+    // frame with several overlaps still resolves exactly one closest target.
+    Collision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     Collision->SetCollisionResponseToAllChannels(ECR_Ignore);
-    Collision->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
     SetRootComponent(Collision);
-    Collision->OnComponentBeginOverlap.AddDynamic(this, &AHookActor::HandleOverlap);
 
     HookMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HookMesh"));
     HookMesh->SetupAttachment(Collision);
@@ -56,9 +56,4 @@ void AHookActor::Tick(float DeltaSeconds)
     RopeMesh->SetWorldLocation((Start + End) * 0.5f);
     RopeMesh->SetWorldRotation(FQuat::FindBetweenNormals(FVector::UpVector, Delta.GetSafeNormal()).Rotator());
     RopeMesh->SetWorldScale3D(FVector(0.035f, 0.035f, FMath::Max(Length / 100.0f, 0.01f)));
-}
-
-void AHookActor::HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
-{
-    if (OwnerComponent.IsValid() && OtherActor && OtherActor != GetOwner()) OwnerComponent->NotifyHookOverlap(OtherActor);
 }

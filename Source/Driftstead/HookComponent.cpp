@@ -48,7 +48,8 @@ void UHookComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
     else if (State == EHookState::Flying && ActiveHook)
     {
         const FVector PreviousLocation = ActiveHook->GetActorLocation();
-        const FVector NextLocation = PreviousLocation + FlightDirection * FlightSpeed * DeltaTime;
+        FVector NextLocation = PreviousLocation + FlightDirection * FlightSpeed * DeltaTime;
+        NextLocation.Z = FMath::FInterpConstantTo(PreviousLocation.Z, CatchPlaneHeight, DeltaTime, CatchPlaneApproachSpeed);
         ActiveHook->SetActorLocation(NextLocation, true);
         TryCatchAlongFlightPath(PreviousLocation, ActiveHook->GetActorLocation());
         if (State == EHookState::Flying && FVector::DistSquared2D(LaunchOrigin, ActiveHook->GetActorLocation()) >= FMath::Square(TargetRange)) BeginReturn(false);
@@ -113,7 +114,9 @@ float UHookComponent::GetChargeAlpha() const
 FVector UHookComponent::GetEstimatedLandingPoint() const
 {
     const float Range = State == EHookState::Charging ? FMath::Lerp(MinimumRange, MaximumRange, GetChargeAlpha()) : MaximumRange;
-    return GetRopeOrigin() + AimDirection * Range;
+    FVector LandingPoint = GetRopeOrigin() + AimDirection * Range;
+    LandingPoint.Z = CatchPlaneHeight;
+    return LandingPoint;
 }
 
 FVector UHookComponent::GetRopeOrigin() const
@@ -179,13 +182,23 @@ void UHookComponent::TryCatchAlongFlightPath(const FVector& Start, const FVector
     const FCollisionShape CatchShape = FCollisionShape::MakeCapsule(PlanarCatchRadius, PlanarCatchHalfHeight);
     if (!GetWorld()->SweepMultiByObjectType(Hits, Start, End, FQuat::Identity, ObjectQuery, CatchShape, Query)) return;
 
+    // SweepMulti hit ordering is not a gameplay contract. Resolve the closest
+    // planar target once so overlapping catch volumes can never collect more
+    // than one item or pick a visually distant item first.
+    AActor* ClosestCandidate = nullptr;
+    float ClosestDistanceSquared = TNumericLimits<float>::Max();
     for (const FHitResult& Hit : Hits)
     {
         AActor* Candidate = Hit.GetActor();
         if (!Candidate || !Candidate->GetClass()->ImplementsInterface(UCatchableInterface::StaticClass())) continue;
-        NotifyHookOverlap(Candidate);
-        if (State != EHookState::Flying) return;
+        const float DistanceSquared = FVector::DistSquared2D(End, Candidate->GetActorLocation());
+        if (DistanceSquared < ClosestDistanceSquared)
+        {
+            ClosestCandidate = Candidate;
+            ClosestDistanceSquared = DistanceSquared;
+        }
     }
+    if (ClosestCandidate) NotifyHookOverlap(ClosestCandidate);
 }
 
 void UHookComponent::BeginReturn(bool bHitSomething)

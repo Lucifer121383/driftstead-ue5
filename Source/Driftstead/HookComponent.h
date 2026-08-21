@@ -44,6 +44,8 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category="Hook") float HookCapacity = 6.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook|Catching", meta=(ClampMin="1.0")) float PlanarCatchRadius = 95.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook|Catching", meta=(ClampMin="1.0")) float PlanarCatchHalfHeight = 1200.0f;
+    UPROPERTY(EditDefaultsOnly, Category="Hook|Catching") float CatchPlaneHeight = 55.0f;
+    UPROPERTY(EditDefaultsOnly, Category="Hook|Catching", meta=(ClampMin="1.0")) float CatchPlaneApproachSpeed = 650.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook") TSubclassOf<AHookActor> HookActorClass;
 
 private:

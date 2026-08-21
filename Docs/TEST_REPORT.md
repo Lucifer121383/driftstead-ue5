@@ -14,13 +14,13 @@
 
 | 验证 | 结果 | 证据 |
 | --- | --- | --- |
-| Editor 编译 | PASS | `BuildEditor-20260821-192847.log` |
+| Editor 编译 | PASS | `BuildEditor-20260821-203446.log` |
 | Python 内容生成与校验 | PASS | 31 个必需资产；两个 DataTable 各 10 行；设施解锁/升级成本完整；导入 `0 Problems`；`ContentValidation.json` 为 `passed: true` |
 | C++ 自动化测试 | PASS 22/22 | `AutomationTests.log`；新增背包缩容保全物品用例 |
-| 编辑器运行时烟测 | PASS | `RuntimeSmoke.log`；800 cm Z 高差平面捕获、雨水桶计时产出均通过 |
+| 编辑器运行时烟测 | PASS | `RuntimeSmoke.log`；同一范围两个不同 Z 高度目标只回收最近一个，800 cm Z 高差平面捕获、雨水桶计时产出均通过 |
 | 截图采集 | PASS 6/6 | `Artifacts/Screenshots`；木筏、钩爪和漂流物已显示新 PBR 材质 |
-| Win64 Build/Cook/Stage/Pak/Archive | PASS | `PackageWin64-20260821-193426.log`，最终 Development 包 `BUILD SUCCESSFUL`；Shipping 流程亦于 `PackageWin64-20260821-192323.log` 成功完成 |
-| 打包版烟测 | PASS | `PackagedSmoke.log`，从最终归档 exe 重复完整烟测并验证被动设施生产 |
+| Win64 Build/Cook/Stage/Pak/Archive | PASS | `PackageWin64-20260821-203522.log`，最终 Development 包 `BUILD SUCCESSFUL`；Shipping 流程亦于 `PackageWin64-20260821-192323.log` 成功完成 |
+| 打包版烟测 | PASS | `PackagedSmoke.log`，从最终归档 exe 验证单目标平面钩取、被动设施生产与存档读取 |
 | 打包版 GUI 中文检查 | PASS | 实际观察主菜单、HUD、任务、帮助和背包，无乱码或缺字 |
 | F5 保存冲突回归 | PASS | 新打包版实测显示“游戏已保存。”，画面保持 Lit，不再进入 Shader Complexity 棋盘格视图 |
 
@@ -34,6 +34,7 @@
 - 设施产出与储物柜状态保存；强制降为 1 级后加载，精确恢复 10 级、输出、绳索数量和设施状态。
 - Cook 后启动 `Artifacts/Driftstead_Demo_Win64/Windows/Driftstead.exe`，重复完整烟测。
 - 钩爪局部胶囊 Sweep 按 X/Y 平面命中，并以 800 cm Z 高差目标验证忽略视觉高度。
+- 钩爪 Sweep 命中列表按钩头平面距离选出唯一最近目标；第二个重叠候选必须保留在世界中，物品命中后 Snap 到钩头并共同返回。
 - F5 保存与 UE 默认调试键解绑回归；保存提示、中文 HUD 和正常光照画面同步验证。
 - 主菜单、暂停面板和背包输入隔离；暂停时世界停止，`Esc` 输入可在暂停状态恢复。
 - 损坏存档中的异常楼层、NaN/无限值或远离木筏的坐标会被规范化到安全位置。

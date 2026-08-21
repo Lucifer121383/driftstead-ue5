@@ -32,4 +32,4 @@ $fail = @(Select-String -LiteralPath $log -Pattern 'DRIFTSTEAD_SMOKE FAIL|Fatal 
 if ($pass.Count -ne 1 -or $fail.Count -gt 0) {
     throw "Runtime smoke verification failed (pass markers=$($pass.Count), failure markers=$($fail.Count)). Full log: $log"
 }
-Write-Host 'Runtime smoke test passed: planar hook recovery, inventory, multi-floor raft generation, passive facility production, facility storage, and versioned save/load.'
+Write-Host 'Runtime smoke test passed: single-target planar hook recovery, inventory, multi-floor raft generation, passive facility production, facility storage, and versioned save/load.'

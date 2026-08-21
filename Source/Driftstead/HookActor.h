@@ -18,8 +18,6 @@ public:
     virtual void Tick(float DeltaSeconds) override;
     void InitializeHook(UHookComponent* InOwnerComponent);
 
-    UFUNCTION() void HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
-
 protected:
     UPROPERTY(VisibleAnywhere) TObjectPtr<USphereComponent> Collision;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> HookMesh;

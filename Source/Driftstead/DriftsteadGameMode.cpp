@@ -164,6 +164,9 @@ void ADriftsteadGameMode::RunSmokeStep()
         ADriftItemActor* Item = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), TargetLocation, FRotator::ZeroRotator);
         if (Item) Item->ConfigureItem(TEXT("Driftwood"), FVector::ZeroVector);
         SmokeTarget = Item;
+        ADriftItemActor* Decoy = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), TargetLocation + FVector(80, 0, -1200), FRotator::ZeroRotator);
+        if (Decoy) Decoy->ConfigureItem(TEXT("Driftwood"), FVector::ZeroVector);
+        SmokeDecoy = Decoy;
         Character->GetHook()->StartCharging();
         UE_LOG(LogDriftstead, Display, TEXT("DRIFTSTEAD_SMOKE: charge started"));
         break;
@@ -179,11 +182,13 @@ void ADriftsteadGameMode::RunSmokeStep()
             --SmokeStep;
             break;
         }
-        if (Character->GetInventory()->CountItem(TEXT("Driftwood")) <= SmokeInitialDriftwood || IsValid(SmokeTarget))
+        if (Character->GetInventory()->CountItem(TEXT("Driftwood")) != SmokeInitialDriftwood + 1 || IsValid(SmokeTarget) || !IsValid(SmokeDecoy))
         {
-            UE_LOG(LogDriftstead, Error, TEXT("DRIFTSTEAD_SMOKE FAIL: designated Driftwood was not recovered"));
+            UE_LOG(LogDriftstead, Error, TEXT("DRIFTSTEAD_SMOKE FAIL: hook did not recover exactly one closest designated Driftwood"));
             bSmokeFailed = true;
         }
+        if (IsValid(SmokeDecoy)) SmokeDecoy->Destroy();
+        SmokeDecoy = nullptr;
         RaftManager->ForceLevel(4);
         Character->SetCurrentFloor(1);
         if (RaftManager->GetMaximumFloor() != 1 || Character->GetCurrentFloor() != 1)
@@ -283,7 +288,7 @@ void ADriftsteadGameMode::RunSmokeStep()
             }
             GI->DeleteAutomationSave();
         }
-        UE_LOG(LogDriftstead, Display, TEXT("DRIFTSTEAD_SMOKE %s: hook, inventory, levels 4/7/10, floors, passive production, facility storage and isolated save/load"), bSmokeFailed ? TEXT("FAIL") : TEXT("PASS"));
+        UE_LOG(LogDriftstead, Display, TEXT("DRIFTSTEAD_SMOKE %s: single-target planar hook recovery, inventory, levels 4/7/10, floors, passive production, facility storage and isolated save/load"), bSmokeFailed ? TEXT("FAIL") : TEXT("PASS"));
         GetWorldTimerManager().ClearTimer(SmokeTimer);
         FGenericPlatformMisc::RequestExit(false);
         break;

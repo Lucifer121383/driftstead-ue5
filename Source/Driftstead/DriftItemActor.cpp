@@ -99,10 +99,13 @@ float ADriftItemActor::GetCatchWeight_Implementation() const
 
 void ADriftItemActor::OnCaught_Implementation(AActor* HookActor)
 {
+    if (!HookActor || bCaught) return;
     bCaught = true;
     DriftVelocity = FVector::ZeroVector;
     Collision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    AttachToActor(HookActor, FAttachmentTransformRules::KeepWorldTransform);
+    AttachToActor(HookActor, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+    SetActorRelativeLocation(FVector(0.0f, 0.0f, -22.0f));
+    SetActorRelativeRotation(FRotator::ZeroRotator);
 }
 
 void ADriftItemActor::PrepareForRecovery()
