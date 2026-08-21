@@ -65,9 +65,15 @@ void ADriftItemActor::ApplyDefinitionVisuals()
     const FDriftItemDefinition* Definition = FDriftsteadItemCatalog::Find(ItemId);
     if (!Definition) return;
 
-    Collision->SetSphereRadius(Definition->WorldCollisionSize.GetMax() * 0.55f);
+    // Keep the visible mesh size data-driven, but make the gameplay target more
+    // forgiving than its low-poly silhouette.
+    Collision->SetSphereRadius(FMath::Max(Definition->WorldCollisionSize.GetMax() * 0.85f, 75.0f));
     VisualMesh->SetWorldScale3D(Definition->WorldCollisionSize / 100.0f);
-    UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Driftstead/Materials/M_WoodLight.M_WoodLight"));
+    const TCHAR* MaterialPath = TEXT("/Game/Driftstead/Materials/M_WoodLight.M_WoodLight");
+    if (ItemId == TEXT("Rope")) MaterialPath = TEXT("/Game/Driftstead/Materials/M_Rope.M_Rope");
+    else if (ItemId == TEXT("Cloth")) MaterialPath = TEXT("/Game/Driftstead/Materials/M_Cloth.M_Cloth");
+    else if (ItemId == TEXT("ScrapMetal") || ItemId == TEXT("MachineryCrate") || ItemId == TEXT("Electronics")) MaterialPath = TEXT("/Game/Driftstead/Materials/M_Metal.M_Metal");
+    UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, MaterialPath);
     if (BaseMaterial)
     {
         UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(BaseMaterial, this);

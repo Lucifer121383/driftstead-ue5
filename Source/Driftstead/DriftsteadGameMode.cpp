@@ -158,7 +158,9 @@ void ADriftsteadGameMode::RunSmokeStep()
         Character->GetInventory()->AddTestResources(100);
         SmokeInitialDriftwood = Character->GetInventory()->CountItem(TEXT("Driftwood"));
         Character->GetHook()->SetAimDirection(FVector(0, 1, 0));
-        const FVector TargetLocation = Character->GetActorLocation() + FVector(0, 480, 65);
+        // Deliberately separate Z by 800 units: hook targeting is planar (X/Y)
+        // and must not miss because of the orthographic presentation height.
+        const FVector TargetLocation = Character->GetActorLocation() + FVector(0, 480, 800);
         ADriftItemActor* Item = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), TargetLocation, FRotator::ZeroRotator);
         if (Item) Item->ConfigureItem(TEXT("Driftwood"), FVector::ZeroVector);
         SmokeTarget = Item;

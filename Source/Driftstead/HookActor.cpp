@@ -2,6 +2,7 @@
 #include "HookComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 
 AHookActor::AHookActor()
@@ -9,9 +10,11 @@ AHookActor::AHookActor()
     PrimaryActorTick.bCanEverTick = true;
 
     Collision = CreateDefaultSubobject<USphereComponent>(TEXT("HookCollision"));
-    Collision->InitSphereRadius(28.0f);
+    Collision->InitSphereRadius(56.0f);
+    Collision->SetCollisionObjectType(ECC_WorldDynamic);
     Collision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-    Collision->SetCollisionResponseToAllChannels(ECR_Overlap);
+    Collision->SetCollisionResponseToAllChannels(ECR_Ignore);
+    Collision->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
     SetRootComponent(Collision);
     Collision->OnComponentBeginOverlap.AddDynamic(this, &AHookActor::HandleOverlap);
 
@@ -20,6 +23,8 @@ AHookActor::AHookActor()
     HookMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
     if (Sphere.Succeeded()) HookMesh->SetStaticMesh(Sphere.Object);
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> MetalMaterial(TEXT("/Game/Driftstead/Materials/M_Metal.M_Metal"));
+    if (MetalMaterial.Succeeded()) HookMesh->SetMaterial(0, MetalMaterial.Object);
     HookMesh->SetRelativeScale3D(FVector(0.35f));
 
     RopeMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RopeMesh"));
@@ -30,6 +35,8 @@ AHookActor::AHookActor()
     RopeMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
     if (Cylinder.Succeeded()) RopeMesh->SetStaticMesh(Cylinder.Object);
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> RopeMaterial(TEXT("/Game/Driftstead/Materials/M_Rope.M_Rope"));
+    if (RopeMaterial.Succeeded()) RopeMesh->SetMaterial(0, RopeMaterial.Object);
 }
 
 void AHookActor::InitializeHook(UHookComponent* InOwnerComponent)

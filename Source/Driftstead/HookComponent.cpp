@@ -47,8 +47,11 @@ void UHookComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
     }
     else if (State == EHookState::Flying && ActiveHook)
     {
-        ActiveHook->SetActorLocation(ActiveHook->GetActorLocation() + FlightDirection * FlightSpeed * DeltaTime, true);
-        if (FVector::DistSquared(LaunchOrigin, ActiveHook->GetActorLocation()) >= FMath::Square(TargetRange)) BeginReturn(false);
+        const FVector PreviousLocation = ActiveHook->GetActorLocation();
+        const FVector NextLocation = PreviousLocation + FlightDirection * FlightSpeed * DeltaTime;
+        ActiveHook->SetActorLocation(NextLocation, true);
+        TryCatchAlongFlightPath(PreviousLocation, ActiveHook->GetActorLocation());
+        if (State == EHookState::Flying && FVector::DistSquared2D(LaunchOrigin, ActiveHook->GetActorLocation()) >= FMath::Square(TargetRange)) BeginReturn(false);
     }
     else if (State == EHookState::Returning && ActiveHook)
     {
@@ -158,6 +161,31 @@ void UHookComponent::NotifyHookOverlap(AActor* OtherActor)
     ICatchableInterface::Execute_OnCaught(OtherActor, ActiveHook);
     SetState(EHookState::Attached);
     BeginReturn(true);
+}
+
+void UHookComponent::TryCatchAlongFlightPath(const FVector& Start, const FVector& End)
+{
+    if (State != EHookState::Flying || !GetWorld()) return;
+
+    TArray<FHitResult> Hits;
+    FCollisionObjectQueryParams ObjectQuery;
+    ObjectQuery.AddObjectTypesToQuery(ECC_WorldDynamic);
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(DriftsteadHookPlanarCatch), false, GetOwner());
+    if (IsValid(ActiveHook)) Query.AddIgnoredActor(ActiveHook);
+
+    // A tall vertical capsule makes catching a 2D gameplay decision: the hook
+    // must cross the item's X/Y position, while presentation-only Z differences
+    // between the ocean, hook and upper raft floors do not create false misses.
+    const FCollisionShape CatchShape = FCollisionShape::MakeCapsule(PlanarCatchRadius, PlanarCatchHalfHeight);
+    if (!GetWorld()->SweepMultiByObjectType(Hits, Start, End, FQuat::Identity, ObjectQuery, CatchShape, Query)) return;
+
+    for (const FHitResult& Hit : Hits)
+    {
+        AActor* Candidate = Hit.GetActor();
+        if (!Candidate || !Candidate->GetClass()->ImplementsInterface(UCatchableInterface::StaticClass())) continue;
+        NotifyHookOverlap(Candidate);
+        if (State != EHookState::Flying) return;
+    }
 }
 
 void UHookComponent::BeginReturn(bool bHitSomething)

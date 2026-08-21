@@ -14,14 +14,15 @@
 
 | 验证 | 结果 | 证据 |
 | --- | --- | --- |
-| Editor 编译 | PASS | `BuildEditor-20260821-140429.log` |
-| Python 内容生成与校验 | PASS | 两个 DataTable 均 `0 Problems`；`ContentValidation.json` 为 `passed: true` |
+| Editor 编译 | PASS | `BuildEditor-20260821-155837.log` |
+| Python 内容生成与校验 | PASS | 31 个必需资产；两个 DataTable 各 10 行；`ContentValidation.json` 为 `passed: true` |
 | C++ 自动化测试 | PASS 21/21 | `AutomationTests.log` |
-| 编辑器运行时烟测 | PASS | `RuntimeSmoke.log` |
-| 截图采集 | PASS 6/6 | `Artifacts/Screenshots` |
-| Win64 Build/Cook/Stage/Pak/Archive | PASS | `PackageWin64-20260821-141121.log`，Cook `0 error(s), 0 warning(s)` 且 `BUILD SUCCESSFUL` |
-| 打包版烟测 | PASS | `PackagedSmoke.log` |
+| 编辑器运行时烟测 | PASS | `RuntimeSmoke.log`；指定目标与钩爪存在 800 cm Z 高差，仍完成平面捕获与回收 |
+| 截图采集 | PASS 6/6 | `Artifacts/Screenshots`；木筏、钩爪和漂流物已显示新 PBR 材质 |
+| Win64 Build/Cook/Stage/Pak/Archive | PASS | `PackageWin64-20260821-160201.log`，Cook `0 error(s), 0 warning(s)` 且 `BUILD SUCCESSFUL` |
+| 打包版烟测 | PASS | `PackagedSmoke.log`，完整烟测再次通过 |
 | 打包版 GUI 中文检查 | PASS | 实际观察主菜单、HUD、任务、帮助和背包，无乱码或缺字 |
+| F5 保存冲突回归 | PASS | 新打包版实测显示“游戏已保存。”，画面保持 Lit，不再进入 Shader Complexity 棋盘格视图 |
 
 ## 覆盖范围
 
@@ -31,6 +32,9 @@
 - 木筏 1–10 级、4 级二层、7 级三层、正反楼梯链接。
 - 设施产出与储物柜状态保存；强制降为 1 级后加载，精确恢复 10 级、输出、绳索数量和设施状态。
 - Cook 后启动 `Artifacts/Driftstead_Demo_Win64/Windows/Driftstead.exe`，重复完整烟测。
+- 钩爪局部胶囊 Sweep 按 X/Y 平面命中，并以 800 cm Z 高差目标验证忽略视觉高度。
+- F5 保存与 UE 默认调试键解绑回归；保存提示、中文 HUD 和正常光照画面同步验证。
+- 9 张 CC0 1K PBR 源贴图导入后，木筏实例化网格材质使用标志、贴图绑定和 Cook 均验证通过。
 
 ## 日志扫描
 

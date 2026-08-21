@@ -22,7 +22,7 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category="Spawning") int32 MaxActiveItems = 24;
     UPROPERTY(EditDefaultsOnly, Category="Spawning") float SpawnInterval = 1.35f;
     UPROPERTY(EditDefaultsOnly, Category="Spawning") FVector2D SpawnXRange = FVector2D(-900.0f, 900.0f);
-    UPROPERTY(EditDefaultsOnly, Category="Spawning") float SpawnY = 1500.0f;
+    UPROPERTY(EditDefaultsOnly, Category="Spawning") float SpawnY = 1320.0f;
     UPROPERTY(EditDefaultsOnly, Category="Spawning") float CleanupY = -1700.0f;
 
 private:

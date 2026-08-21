@@ -5,6 +5,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 
 ARaftManager::ARaftManager()
@@ -19,11 +20,17 @@ ARaftManager::ARaftManager()
     RailsTwo = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("RailsTwo")); RailsTwo->SetupAttachment(SceneRoot);
     RailsThree = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("RailsThree")); RailsThree->SetupAttachment(SceneRoot);
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> WoodLight(TEXT("/Game/Driftstead/Materials/M_WoodLight.M_WoodLight"));
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> WoodDark(TEXT("/Game/Driftstead/Materials/M_WoodDark.M_WoodDark"));
     for (UInstancedStaticMeshComponent* Component : {FloorOne, FloorTwo, FloorThree, RailsOne, RailsTwo, RailsThree})
     {
         if (Cube.Succeeded()) Component->SetStaticMesh(Cube.Object);
         Component->SetMobility(EComponentMobility::Movable);
     }
+    for (UInstancedStaticMeshComponent* Floor : {FloorOne, FloorTwo, FloorThree})
+        if (WoodLight.Succeeded()) Floor->SetMaterial(0, WoodLight.Object);
+    for (UInstancedStaticMeshComponent* Rails : {RailsOne, RailsTwo, RailsThree})
+        if (WoodDark.Succeeded()) Rails->SetMaterial(0, WoodDark.Object);
     for (UInstancedStaticMeshComponent* Rails : {RailsOne, RailsTwo, RailsThree}) Rails->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 }
 

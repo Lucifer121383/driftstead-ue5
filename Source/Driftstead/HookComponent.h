@@ -42,6 +42,8 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category="Hook") float FlightSpeed = 1200.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook") float ReturnSpeed = 1550.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook") float HookCapacity = 6.0f;
+    UPROPERTY(EditDefaultsOnly, Category="Hook|Catching", meta=(ClampMin="1.0")) float PlanarCatchRadius = 95.0f;
+    UPROPERTY(EditDefaultsOnly, Category="Hook|Catching", meta=(ClampMin="1.0")) float PlanarCatchHalfHeight = 1200.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook") TSubclassOf<AHookActor> HookActorClass;
 
 private:
@@ -49,6 +51,7 @@ private:
     void BeginReturn(bool bHitSomething);
     void FinishReturn();
     void EnterIdle();
+    void TryCatchAlongFlightPath(const FVector& Start, const FVector& End);
     void NotifyPlayer(const FText& Message, FLinearColor Color) const;
 
     UPROPERTY(VisibleInstanceOnly, Category="Hook") EHookState State = EHookState::Idle;

@@ -88,7 +88,7 @@ void ADriftsteadCharacter::BeginPlay()
     Inventory->AddResource(TEXT("Wood"), 8);
     Inventory->AddResource(TEXT("Rope"), 3);
 
-    UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Driftstead/Materials/M_WoodLight.M_WoodLight"));
+    UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Driftstead/Materials/M_Character.M_Character"));
     const TArray<TPair<UStaticMeshComponent*, FLinearColor>> Colors = {
         {BodyMesh, FLinearColor(0.10f, 0.55f, 0.68f)}, {HeadMesh, FLinearColor(0.95f, 0.72f, 0.48f)},
         {HatMesh, FLinearColor(0.92f, 0.63f, 0.16f)}, {BackpackMesh, FLinearColor(0.34f, 0.18f, 0.08f)}
