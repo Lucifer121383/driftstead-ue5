@@ -54,8 +54,19 @@ bool UDriftsteadGameInstance::LoadCurrentGame()
     GameMode->SetRaftLevelFromSave(Save->RaftLevel);
     if (Save->SaveVersion >= 2) GameMode->RestoreFacilityStates(Save->FacilityStates);
     Character->GetInventory()->RestoreState(Save->InventoryColumns, Save->InventoryRows, Save->InventoryEntries, Save->RecoveryBasket, Save->Resources);
-    Character->SetActorLocation(Save->PlayerLocation, false, nullptr, ETeleportType::TeleportPhysics);
-    Character->SetCurrentFloor(Save->CurrentFloor, false);
+    const int32 SafeFloor = FMath::Clamp(Save->CurrentFloor, 0, GameMode->GetMaximumFloor());
+    FVector SafeLocation = Save->PlayerLocation;
+    const bool bInvalidLocation = SafeLocation.ContainsNaN()
+        || !FMath::IsFinite(SafeLocation.X) || !FMath::IsFinite(SafeLocation.Y) || !FMath::IsFinite(SafeLocation.Z)
+        || FVector2D(SafeLocation.X, SafeLocation.Y).SizeSquared() > FMath::Square(2500.0f);
+    if (bInvalidLocation)
+    {
+        SafeLocation.X = 0.0f;
+        SafeLocation.Y = 0.0f;
+    }
+    SafeLocation.Z = 110.0f + SafeFloor * 340.0f;
+    Character->SetActorLocation(SafeLocation, false, nullptr, ETeleportType::TeleportPhysics);
+    Character->SetCurrentFloor(SafeFloor, false);
     if (UDriftsteadQuestSubsystem* Quest = GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->RestoreQuest(Save->CurrentQuest, Save->bTutorialComplete);
     Character->ShowFeedback(NSLOCTEXT("Driftstead", "Loaded", "存档已加载。"), FLinearColor::Green);
     return true;

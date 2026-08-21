@@ -25,7 +25,7 @@ def main() -> None:
         importlib.reload(module)
         module.main()
 
-    unreal.EditorAssetLibrary.save_directory("/Game/Driftstead", only_if_is_dirty=False, recursive=True)
+    unreal.EditorAssetLibrary.save_directory("/Game/Driftstead", only_if_is_dirty=True, recursive=True)
     unreal.log("[Driftstead] Bootstrap completed successfully.")
 
 

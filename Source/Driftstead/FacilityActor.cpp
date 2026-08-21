@@ -14,6 +14,7 @@
 AFacilityActor::AFacilityActor()
 {
     PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.bStartWithTickEnabled = false;
     InteractionBounds = CreateDefaultSubobject<UBoxComponent>(TEXT("InteractionBounds"));
     InteractionBounds->InitBoxExtent(FVector(90.0f, 90.0f, 100.0f));
     InteractionBounds->SetCollisionObjectType(ECC_WorldDynamic);
@@ -45,6 +46,7 @@ void AFacilityActor::BeginPlay()
     StorageInventory->InitializeGrid(8, 4);
     ApplyVisuals();
     ConfigureProductionTimer();
+    UpdateTickEnabled();
 }
 
 void AFacilityActor::ConfigureProductionTimer()
@@ -58,6 +60,11 @@ void AFacilityActor::ConfigureProductionTimer()
     {
         GetWorldTimerManager().SetTimer(ProductionTimer, this, &AFacilityActor::RunAutoCrane, 3.0f, true, 2.0f);
     }
+}
+
+void AFacilityActor::UpdateTickEnabled()
+{
+    SetActorTickEnabled(bProducing || FacilityType == EFacilityType::WindTurbine || FacilityType == EFacilityType::AutoCrane);
 }
 
 void AFacilityActor::Tick(float DeltaSeconds)
@@ -83,6 +90,7 @@ void AFacilityActor::Configure(EFacilityType NewType, int32 NewFloorIndex)
     {
         ApplyVisuals();
         ConfigureProductionTimer();
+        UpdateTickEnabled();
     }
 }
 
@@ -115,6 +123,7 @@ void AFacilityActor::RestoreSaveState(const FFacilitySaveState& State)
     }
     GetWorldTimerManager().ClearTimer(FarmTimer);
     if (bProducing) GetWorldTimerManager().SetTimer(FarmTimer, this, &AFacilityActor::FinishFarmProduction, 6.0f, false);
+    UpdateTickEnabled();
 }
 
 void AFacilityActor::ApplyVisuals()
@@ -127,6 +136,7 @@ void AFacilityActor::ApplyVisuals()
         {EFacilityType::TradingDock, FLinearColor(0.60f,0.24f,0.72f)}, {EFacilityType::Desalinator, FLinearColor(0.10f,0.72f,0.76f)},
         {EFacilityType::Lighthouse, FLinearColor(0.92f,0.16f,0.12f)}
     };
+    AccentMesh->SetRelativeScale3D(FVector(0.32f, 0.32f, 0.75f));
     UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Driftstead/Materials/M_WoodLight.M_WoodLight"));
     if (!Base) return;
     UMaterialInstanceDynamic* BodyMaterial = UMaterialInstanceDynamic::Create(Base, this);
@@ -149,6 +159,8 @@ void AFacilityActor::FinishFarmProduction()
 {
     bProducing = false;
     StoredOutput = FMath::Min(Capacity, StoredOutput + 2);
+    AccentMesh->SetRelativeScale3D(FVector(0.32f, 0.32f, 0.75f));
+    UpdateTickEnabled();
 }
 
 void AFacilityActor::RunAutoCrane()
@@ -209,6 +221,7 @@ bool AFacilityActor::Interact_Implementation(ADriftsteadCharacter* Character)
             TMap<FName,int32> Cost{{TEXT("Seeds"),1},{TEXT("Water"),1}};
             Inventory->ConsumeResourcesTransactional(Cost); bProducing = true;
             GetWorldTimerManager().SetTimer(FarmTimer, this, &AFacilityActor::FinishFarmProduction, 6.0f, false);
+            UpdateTickEnabled();
             Character->ShowFeedback(NSLOCTEXT("Driftstead", "FarmStarted", "种子已播下，作物开始生长。"), FLinearColor::Green);
             return true;
         }

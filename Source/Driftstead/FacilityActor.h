@@ -43,6 +43,7 @@ protected:
 private:
     void ApplyVisuals();
     void ConfigureProductionTimer();
+    void UpdateTickEnabled();
     void PerformProduction();
     void FinishFarmProduction();
     void RunAutoCrane();

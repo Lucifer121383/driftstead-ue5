@@ -10,10 +10,35 @@ void UInventoryComponent::InitializeGrid(int32 Columns, int32 Rows)
 {
     GridColumns = FMath::Clamp(Columns, 1, 20);
     GridRows = FMath::Clamp(Rows, 1, 20);
-    Entries.RemoveAll([this](const FInventoryEntry& Entry)
+
+    // A debug level change or a loaded progression state can shrink the grid.
+    // Repack displaced entries and preserve overflow in the recovery basket
+    // instead of silently deleting player-owned items.
+    TArray<FInventoryEntry> PreviousEntries = MoveTemp(Entries);
+    Entries.Reset();
+    for (FInventoryEntry& Entry : PreviousEntries)
     {
-        return !CanPlace(Entry, Entry.GridPosition, Entry.bRotated, Entry.InstanceId);
-    });
+        if (CanPlace(Entry, Entry.GridPosition, Entry.bRotated))
+        {
+            Entries.Add(Entry);
+            continue;
+        }
+
+        FIntPoint NewPosition;
+        bool bNewRotation = false;
+        if (FindFirstFit(Entry.ItemId, NewPosition, bNewRotation))
+        {
+            Entry.GridPosition = NewPosition;
+            Entry.bRotated = bNewRotation;
+            Entries.Add(Entry);
+        }
+        else
+        {
+            Entry.GridPosition = FIntPoint::ZeroValue;
+            Entry.bRotated = false;
+            RecoveryBasket.Add(Entry);
+        }
+    }
     OnInventoryChanged.Broadcast();
 }
 

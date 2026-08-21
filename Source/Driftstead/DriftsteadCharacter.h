@@ -32,6 +32,7 @@ public:
 private:
     UInputAction* CreateBooleanAction(FKey Key);
     bool IsShiftDown() const;
+    bool IsGameplayInputBlocked(bool bIncludeInventory = false) const;
     void UpdateAim();
     void MoveForwardOn(); void MoveForwardOff();
     void MoveBackwardOn(); void MoveBackwardOff();

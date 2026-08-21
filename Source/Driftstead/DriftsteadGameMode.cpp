@@ -205,6 +205,38 @@ void ADriftsteadGameMode::RunSmokeStep()
     {
         RaftManager->ForceLevel(10);
         Character->GetInventory()->AddResource(TEXT("Power"), 10);
+        for (const FFacilitySaveState& State : RaftManager->CaptureFacilityStates())
+        {
+            if (State.FacilityType == EFacilityType::RainBarrel)
+            {
+                SmokeInitialPassiveOutput = State.StoredOutput;
+                break;
+            }
+        }
+        if (SmokeInitialPassiveOutput < 0)
+        {
+            UE_LOG(LogDriftstead, Error, TEXT("DRIFTSTEAD_SMOKE FAIL: passive production facility missing"));
+            bSmokeFailed = true;
+        }
+        break;
+    }
+    case 5:
+    {
+        if (SmokeProductionWaitTicks++ < 10)
+        {
+            --SmokeStep;
+            break;
+        }
+        const TArray<FFacilitySaveState> ProducedStates = RaftManager->CaptureFacilityStates();
+        const FFacilitySaveState* ProducedState = ProducedStates.FindByPredicate([](const FFacilitySaveState& State)
+        {
+            return State.FacilityType == EFacilityType::RainBarrel;
+        });
+        if (!ProducedState || ProducedState->StoredOutput <= SmokeInitialPassiveOutput)
+        {
+            UE_LOG(LogDriftstead, Error, TEXT("DRIFTSTEAD_SMOKE FAIL: passive facility timer did not produce output"));
+            bSmokeFailed = true;
+        }
         TArray<FFacilitySaveState> FacilityStates = RaftManager->CaptureFacilityStates();
         FFacilitySaveState ExpectedFacilityState;
         bool bHasExpectedFacilityState = false;
@@ -251,7 +283,7 @@ void ADriftsteadGameMode::RunSmokeStep()
             }
             GI->DeleteAutomationSave();
         }
-        UE_LOG(LogDriftstead, Display, TEXT("DRIFTSTEAD_SMOKE %s: hook, inventory, levels 4/7/10, floors, facility storage and isolated save/load"), bSmokeFailed ? TEXT("FAIL") : TEXT("PASS"));
+        UE_LOG(LogDriftstead, Display, TEXT("DRIFTSTEAD_SMOKE %s: hook, inventory, levels 4/7/10, floors, passive production, facility storage and isolated save/load"), bSmokeFailed ? TEXT("FAIL") : TEXT("PASS"));
         GetWorldTimerManager().ClearTimer(SmokeTimer);
         FGenericPlatformMisc::RequestExit(false);
         break;

@@ -91,6 +91,10 @@ void ADriftsteadHUD::DrawInventory(float SX, float SY)
         const FDriftItemDefinition* Definition = FDriftsteadItemCatalog::Find(Entry.ItemId);
         if (!Definition) continue;
         const FIntPoint Size = Entry.bRotated ? FIntPoint(Definition->Footprint.Y, Definition->Footprint.X) : Definition->Footprint;
+        if (Entry.InstanceId == SelectedInstanceId)
+        {
+            DrawPanel(X0 + Entry.GridPosition.X * Cell, Y0 + Entry.GridPosition.Y * Cell, Size.X * Cell - 3, Size.Y * Cell - 3, FLinearColor(1.0f, 0.72f, 0.20f, 0.95f));
+        }
         DrawPanel(X0 + Entry.GridPosition.X * Cell + 4, Y0 + Entry.GridPosition.Y * Cell + 4, Size.X * Cell - 11, Size.Y * Cell - 11, Definition->PrimaryColor.CopyWithNewOpacity(0.92f));
         DrawText(FString::Printf(TEXT("%s ×%d"), *Definition->DisplayName.ToString(), Entry.Quantity), FLinearColor::White, X0 + Entry.GridPosition.X * Cell + 9, Y0 + Entry.GridPosition.Y * Cell + 12, InterfaceFont, 0.68f * FMath::Min(SX, SY));
     }
@@ -116,10 +120,12 @@ bool ADriftsteadHUD::BeginInventoryDrag()
         if (CellPosition.X >= Entry.GridPosition.X && CellPosition.Y >= Entry.GridPosition.Y && CellPosition.X < Entry.GridPosition.X + Size.X && CellPosition.Y < Entry.GridPosition.Y + Size.Y)
         {
             DraggedInstanceId = Entry.InstanceId;
+            SelectedInstanceId = Entry.InstanceId;
             DragCellOffset = CellPosition - Entry.GridPosition;
             return true;
         }
     }
+    SelectedInstanceId.Invalidate();
     return false;
 }
 

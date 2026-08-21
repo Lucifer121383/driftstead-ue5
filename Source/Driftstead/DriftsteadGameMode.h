@@ -40,6 +40,8 @@ private:
     int32 SmokeStep = 0;
     int32 SmokeWaitTicks = 0;
     int32 SmokeInitialDriftwood = 0;
+    int32 SmokeInitialPassiveOutput = -1;
+    int32 SmokeProductionWaitTicks = 0;
     bool bSmokeFailed = false;
     FTimerHandle SmokeTimer;
     int32 CaptureStep = 0;

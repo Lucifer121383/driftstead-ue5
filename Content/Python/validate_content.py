@@ -47,6 +47,19 @@ def main() -> None:
         missing_values = sorted(value for value in expected_values if value not in serialized_column)
         if missing_values:
             table_errors.append(f"{table_name}.{column_name}: missing Chinese values {missing_values}")
+        if table_name == "DT_RaftLevels":
+            facilities = unreal.DataTableFunctionLibrary.get_data_table_column_as_string(table, "Facilities")
+            upgrade_costs = unreal.DataTableFunctionLibrary.get_data_table_column_as_string(table, "UpgradeCost")
+            serialized_facilities = "\n".join(facilities)
+            serialized_costs = "\n".join(upgrade_costs)
+            required_facilities = ("Workbench", "RainBarrel", "FarmPlot", "WindTurbine", "Lighthouse")
+            required_cost_resources = ("Wood", "Rope", "Metal", "Parts")
+            missing_facilities = [value for value in required_facilities if value not in serialized_facilities]
+            missing_cost_resources = [value for value in required_cost_resources if value not in serialized_costs]
+            if len(facilities) != expected_count or missing_facilities:
+                table_errors.append(f"{table_name}.Facilities: incomplete progression data; missing {missing_facilities}")
+            if len(upgrade_costs) != expected_count or missing_cost_resources:
+                table_errors.append(f"{table_name}.UpgradeCost: incomplete progression data; missing {missing_cost_resources}")
     report = {
         "required_asset_count": len(REQUIRED_ASSETS),
         "missing": missing,

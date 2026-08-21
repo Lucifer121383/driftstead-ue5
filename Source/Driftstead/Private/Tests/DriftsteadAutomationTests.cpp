@@ -88,6 +88,20 @@ bool FInventoryRecoveryBasket::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInventoryResizePreservesItems, "Driftstead.Inventory.ResizePreservesItems", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FInventoryResizePreservesItems::RunTest(const FString& Parameters)
+{
+    UInventoryComponent* Inventory = DriftsteadTests::NewInventory(2, 1);
+    Inventory->TryAddItem(TEXT("Rope"));
+    Inventory->TryAddItem(TEXT("Electronics"));
+    Inventory->InitializeGrid(1, 1);
+    TestEqual(TEXT("Grid retains one stack after shrinking"), Inventory->GetEntries().Num(), 1);
+    TestEqual(TEXT("Displaced stack moves to recovery basket"), Inventory->GetRecoveryBasket().Num(), 1);
+    TestEqual(TEXT("Rope quantity is preserved"), Inventory->CountItem(TEXT("Rope")), 1);
+    TestEqual(TEXT("Electronics quantity is preserved"), Inventory->CountItem(TEXT("Electronics")), 1);
+    return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInventorySplitStack, "Driftstead.Inventory.SplitStack", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FInventorySplitStack::RunTest(const FString& Parameters)
 {

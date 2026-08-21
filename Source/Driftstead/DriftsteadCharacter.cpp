@@ -111,9 +111,10 @@ void ADriftsteadCharacter::Tick(float DeltaSeconds)
     const float RightValue = (bRight ? 1.0f : 0.0f) - (bLeft ? 1.0f : 0.0f);
     FVector ScreenForward = Camera->GetForwardVector(); ScreenForward.Z = 0.0f; ScreenForward.Normalize();
     FVector ScreenRight = Camera->GetRightVector(); ScreenRight.Z = 0.0f; ScreenRight.Normalize();
-    if (!FMath::IsNearlyZero(ForwardValue)) AddMovementInput(ScreenForward, ForwardValue);
-    if (!FMath::IsNearlyZero(RightValue)) AddMovementInput(ScreenRight, RightValue);
-    if (!bMoveQuestNotified && (!FMath::IsNearlyZero(ForwardValue) || !FMath::IsNearlyZero(RightValue)))
+    const bool bInputBlocked = IsGameplayInputBlocked(true);
+    if (!bInputBlocked && !FMath::IsNearlyZero(ForwardValue)) AddMovementInput(ScreenForward, ForwardValue);
+    if (!bInputBlocked && !FMath::IsNearlyZero(RightValue)) AddMovementInput(ScreenRight, RightValue);
+    if (!bInputBlocked && !bMoveQuestNotified && (!FMath::IsNearlyZero(ForwardValue) || !FMath::IsNearlyZero(RightValue)))
     {
         bMoveQuestNotified = true;
         if (UDriftsteadQuestSubsystem* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->NotifyEvent(EDriftsteadQuestStep::Move);
@@ -162,7 +163,9 @@ void ADriftsteadCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
     BindDigital(EKeys::Tab, &ADriftsteadCharacter::ToggleInventory, nullptr);
     BindDigital(EKeys::R, &ADriftsteadCharacter::RotateSelection, nullptr);
     BindDigital(EKeys::B, &ADriftsteadCharacter::RecoverFirstBasketItem, nullptr);
-    BindDigital(EKeys::Escape, &ADriftsteadCharacter::TogglePause, nullptr);
+    UInputAction* PauseAction = CreateBooleanAction(EKeys::Escape);
+    PauseAction->bTriggerWhenPaused = true;
+    Enhanced->BindAction(PauseAction, ETriggerEvent::Started, this, &ADriftsteadCharacter::TogglePause);
     BindDigital(EKeys::F1, &ADriftsteadCharacter::AddDebugResources, nullptr);
     BindDigital(EKeys::F2, &ADriftsteadCharacter::ChangeRaftLevel, nullptr);
     BindDigital(EKeys::F3, &ADriftsteadCharacter::SpawnDebugItems, nullptr);
@@ -208,6 +211,13 @@ bool ADriftsteadCharacter::IsShiftDown() const
     return PC && (PC->IsInputKeyDown(EKeys::LeftShift) || PC->IsInputKeyDown(EKeys::RightShift));
 }
 
+bool ADriftsteadCharacter::IsGameplayInputBlocked(bool bIncludeInventory) const
+{
+    const APlayerController* PC = Cast<APlayerController>(GetController());
+    const ADriftsteadHUD* HUD = PC ? Cast<ADriftsteadHUD>(PC->GetHUD()) : nullptr;
+    return HUD && (HUD->IsMainMenuOpen() || HUD->IsPausePanelOpen() || (bIncludeInventory && HUD->IsInventoryOpen()));
+}
+
 void ADriftsteadCharacter::MoveForwardOn() { bForward = true; }
 void ADriftsteadCharacter::MoveForwardOff() { bForward = false; }
 void ADriftsteadCharacter::MoveBackwardOn() { bBackward = true; }
@@ -220,6 +230,7 @@ void ADriftsteadCharacter::StartHook()
 {
     if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr)
     {
+        if (HUD->IsMainMenuOpen() || HUD->IsPausePanelOpen()) return;
         if (HUD->IsInventoryOpen())
         {
             HUD->BeginInventoryDrag();
@@ -243,10 +254,11 @@ void ADriftsteadCharacter::ReleaseHook()
     }
     Hook->ReleaseHook();
 }
-void ADriftsteadCharacter::RecallHook() { Hook->RecallHook(); }
+void ADriftsteadCharacter::RecallHook() { if (!IsGameplayInputBlocked(true)) Hook->RecallHook(); }
 
 void ADriftsteadCharacter::Interact()
 {
+    if (IsGameplayInputBlocked(true)) return;
     TArray<FOverlapResult> Results;
     FCollisionQueryParams Query(SCENE_QUERY_STAT(DriftsteadInteraction), false, this);
     GetWorld()->OverlapMultiByChannel(Results, GetActorLocation(), FQuat::Identity, ECC_WorldDynamic, FCollisionShape::MakeSphere(180.0f), Query);
@@ -266,6 +278,7 @@ void ADriftsteadCharacter::Interact()
 
 void ADriftsteadCharacter::ToggleInventory()
 {
+    if (IsGameplayInputBlocked()) return;
     if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr) HUD->ToggleInventory();
     if (UDriftsteadQuestSubsystem* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->NotifyEvent(EDriftsteadQuestStep::OpenInventory);
 }
@@ -277,13 +290,25 @@ void ADriftsteadCharacter::RotateSelection()
         ShowFeedback(NSLOCTEXT("Driftstead", "RotateEmpty", "背包是空的。"), FLinearColor::Yellow);
         return;
     }
+    FGuid TargetId = Inventory->GetEntries()[0].InstanceId;
+    if (const APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        if (const ADriftsteadHUD* HUD = Cast<ADriftsteadHUD>(PC->GetHUD()))
+        {
+            const FGuid SelectedId = HUD->GetSelectedInventoryItemId();
+            if (SelectedId.IsValid() && Inventory->GetEntries().ContainsByPredicate([SelectedId](const FInventoryEntry& Entry) { return Entry.InstanceId == SelectedId; }))
+            {
+                TargetId = SelectedId;
+            }
+        }
+    }
     if (IsShiftDown())
     {
-        const bool bSplit = Inventory->SplitStack(Inventory->GetEntries()[0].InstanceId);
+        const bool bSplit = Inventory->SplitStack(TargetId);
         ShowFeedback(bSplit ? NSLOCTEXT("Driftstead", "SplitSuccess", "物品堆已拆分到空闲格位。") : NSLOCTEXT("Driftstead", "SplitFailed", "数量不足，或背包没有可用空间。"), bSplit ? FLinearColor::Green : FLinearColor::Red);
         return;
     }
-    if (Inventory->RotateItem(Inventory->GetEntries()[0].InstanceId))
+    if (Inventory->RotateItem(TargetId))
     {
         ShowFeedback(NSLOCTEXT("Driftstead", "Rotated", "物品已旋转。"), FLinearColor::Green);
         if (UDriftsteadQuestSubsystem* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->NotifyEvent(EDriftsteadQuestStep::RotateItem);
@@ -304,7 +329,12 @@ void ADriftsteadCharacter::RecoverFirstBasketItem()
 
 void ADriftsteadCharacter::TogglePause()
 {
-    if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr) HUD->TogglePausePanel();
+    if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr)
+    {
+        if (HUD->IsMainMenuOpen()) return;
+        HUD->TogglePausePanel();
+        UGameplayStatics::SetGamePaused(this, HUD->IsPausePanelOpen());
+    }
 }
 
 void ADriftsteadCharacter::AddDebugResources() { Inventory->AddTestResources(50); ShowFeedback(NSLOCTEXT("Driftstead", "DebugResources", "已添加测试资源。"), FLinearColor::Yellow); }
@@ -365,6 +395,7 @@ void ADriftsteadCharacter::ResetRuntimeForMode(bool bShowcase)
 
 void ADriftsteadCharacter::StartNewNormalGame()
 {
+    UGameplayStatics::DeleteGameInSlot(TEXT("Driftstead_Normal"), 0);
     ResetRuntimeForMode(false);
 }
 

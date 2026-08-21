@@ -16,10 +16,12 @@ public:
     void SetInventoryOpen(bool bOpen) { bInventoryOpen = bOpen; }
     bool IsInventoryOpen() const { return bInventoryOpen; }
     bool IsDraggingInventoryItem() const { return DraggedInstanceId.IsValid(); }
+    FGuid GetSelectedInventoryItemId() const { return SelectedInstanceId; }
     bool BeginInventoryDrag();
     bool EndInventoryDrag();
     void ToggleDeveloperPanel() { bDeveloperPanelOpen = !bDeveloperPanelOpen; }
     void TogglePausePanel() { bPausePanelOpen = !bPausePanelOpen; }
+    bool IsPausePanelOpen() const { return bPausePanelOpen; }
     void CloseMainMenu() { bMainMenuOpen = false; }
     bool IsMainMenuOpen() const { return bMainMenuOpen; }
 
@@ -34,6 +36,7 @@ private:
     bool bPausePanelOpen = false;
     bool bMainMenuOpen = true;
     FGuid DraggedInstanceId;
+    FGuid SelectedInstanceId;
     FIntPoint DragCellOffset = FIntPoint::ZeroValue;
     FText FeedbackMessage;
     FLinearColor FeedbackColor = FLinearColor::White;
