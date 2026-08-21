@@ -26,7 +26,18 @@
 .\Tools\OpenEditor.ps1
 ```
 
-最终 Win64 包入口：`Artifacts\Driftstead_Demo_Win64\Windows\Driftstead.exe`。
+## 获取项目
+
+公开仓库：<https://github.com/Lucifer121383/driftstead-ue5>
+
+```powershell
+git clone https://github.com/Lucifer121383/driftstead-ue5.git
+cd driftstead-ue5
+.\Tools\BuildEditor.ps1
+.\Tools\OpenEditor.ps1
+```
+
+仓库保留完整源码、Config、Content、Python 自动化、CC0 源贴图和文档。为避免 GitHub 仓库包含数百 MB 的可再生成文件，`Binaries`、`Intermediate`、`Saved`、日志与 Win64 打包产物未提交；运行 `.\Tools\PackageWin64.ps1` 可在本机重新生成 `Artifacts\Driftstead_Demo_Win64\Windows\Driftstead.exe`。
 
 完整架构、自动化和测试证据见 `Docs`。项目协作约束见 `AGENTS.md`。
 
