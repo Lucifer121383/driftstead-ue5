@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import unreal
+from import_demo_art import PROPS
 
 
 REQUIRED_ASSETS = [
@@ -20,12 +21,30 @@ REQUIRED_ASSETS = [
     "/Game/Driftstead/Blueprints/Facilities/BP_Facility",
     "/Game/Driftstead/UI/WBP_HUD",
     "/Game/Driftstead/UI/WBP_Inventory",
+    *[f"/Game/Driftstead/Art/S_{name.replace('-', '_')}" for name in PROPS],
+    *[f"/Game/Driftstead/Art/S_{name}" for name in ('Sailor','GrapplingHook','RopeCoil','DeckStairs')],
+    *[f"/Game/Driftstead/Art/M_{name}" for name in ('PiratePalette','CharacterPalette','Ocean','HookSteel','CoilFiber','StairWood','Beacon')],
+    *[f"/Game/Driftstead/Art/A_{name}" for name in ('Cast','Recover','Build','Plant','Signal')],
 ]
 
 
-def main() -> None:
-    missing = [asset for asset in REQUIRED_ASSETS if not unreal.EditorAssetLibrary.does_asset_exist(asset)]
+def main(require_icons: bool = True) -> None:
+    from create_inventory_icons import ICON_PATHS, SIZE
+    required = REQUIRED_ASSETS + (list(ICON_PATHS.values()) if require_icons else [])
+    missing = [asset for asset in required if not unreal.EditorAssetLibrary.does_asset_exist(asset)]
     table_errors = []
+    if require_icons:
+        for path in ICON_PATHS.values():
+            texture = unreal.load_asset(path)
+            if texture and (not isinstance(texture, unreal.Texture2D) or texture.blueprint_get_size_x() != SIZE or texture.blueprint_get_size_y() != SIZE):
+                table_errors.append(f'{path}: expected {SIZE}x{SIZE} Texture2D')
+    for path in REQUIRED_ASSETS:
+        if '/Art/S_' in path:
+            mesh = unreal.load_asset(path)
+            if mesh:
+                box = mesh.get_bounding_box()
+                if (box.max-box.min).length() <= 0 or not mesh.static_materials:
+                    table_errors.append(f'{path}: empty mesh bounds or materials')
     expected_rows = {"DT_Items": 10, "DT_RaftLevels": 10}
     expected_chinese_columns = {
         "DT_Items": ("DisplayName", {"漂流木捆", "绳索卷", "废铁块", "布料卷", "种子箱", "食物箱", "密封木桶", "机械箱", "电子元件盒", "动物运输箱"}),
@@ -61,7 +80,8 @@ def main() -> None:
             if len(upgrade_costs) != expected_count or missing_cost_resources:
                 table_errors.append(f"{table_name}.UpgradeCost: incomplete progression data; missing {missing_cost_resources}")
     report = {
-        "required_asset_count": len(REQUIRED_ASSETS),
+        "required_asset_count": len(required),
+        "inventory_icons_checked": require_icons,
         "missing": missing,
         "data_table_rows": exported_tables,
         "table_errors": table_errors,

@@ -22,6 +22,11 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
+#include "DemoArt.h"
+#include "FacilityActor.h"
+#include "TimerManager.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 ADriftsteadCharacter::ADriftsteadCharacter()
 {
@@ -85,8 +90,9 @@ void ADriftsteadCharacter::BeginPlay()
 {
     Super::BeginPlay();
     Inventory->InitializeGrid(6, 4);
-    Inventory->AddResource(TEXT("Wood"), 8);
-    Inventory->AddResource(TEXT("Rope"), 3);
+    Inventory->AddResource(TEXT("Wood"), 2);
+    Inventory->AddResource(TEXT("Rope"), 1);
+    GetWorldTimerManager().SetTimer(InteractionTimer, this, &ADriftsteadCharacter::UpdateInteractionTarget, .15f, true);
 
     UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Driftstead/Materials/M_Character.M_Character"));
     const TArray<TPair<UStaticMeshComponent*, FLinearColor>> Colors = {
@@ -102,11 +108,23 @@ void ADriftsteadCharacter::BeginPlay()
             Pair.Key->SetMaterial(0, Material);
         }
     }
+    if (DriftsteadArt::Fit(BodyMesh, TEXT("Sailor"), 174, FVector(0,0,-88)))
+    {
+        bImportedSailor = true;
+        SailorRestLocation = BodyMesh->GetRelativeLocation();
+        BodyMesh->SetRelativeRotation(FRotator(0,-90,0));
+        HeadMesh->SetVisibility(false); HatMesh->SetVisibility(false); BackpackMesh->SetVisibility(false);
+    }
 }
 
 void ADriftsteadCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    if (bReturnToMenuPending && (Hook->GetHookState() == EHookState::Idle || Hook->GetHookState() == EHookState::Cooldown))
+    {
+        FinishReturnToMainMenu();
+        return;
+    }
     const float ForwardValue = (bForward ? 1.0f : 0.0f) - (bBackward ? 1.0f : 0.0f);
     const float RightValue = (bRight ? 1.0f : 0.0f) - (bLeft ? 1.0f : 0.0f);
     FVector ScreenForward = Camera->GetForwardVector(); ScreenForward.Z = 0.0f; ScreenForward.Normalize();
@@ -120,6 +138,12 @@ void ADriftsteadCharacter::Tick(float DeltaSeconds)
         if (UDriftsteadQuestSubsystem* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->NotifyEvent(EDriftsteadQuestStep::Move);
     }
     UpdateAim();
+    if (bImportedSailor)
+    {
+        const float SpeedAlpha = FMath::Clamp(GetVelocity().Size2D()/460.0f, 0.0f, 1.0f);
+        BodyMesh->SetRelativeLocation(SailorRestLocation + FVector(0,0,FMath::Abs(FMath::Sin(GetWorld()->GetTimeSeconds()*11))*5*SpeedAlpha));
+        BodyMesh->SetRelativeRotation(FRotator(0,-90,FMath::Sin(GetWorld()->GetTimeSeconds()*11)*4*SpeedAlpha));
+    }
     if (GetActorLocation().Z < -180.0f)
     {
         GetCharacterMovement()->StopMovementImmediately();
@@ -145,9 +169,10 @@ void ADriftsteadCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
     UEnhancedInputComponent* Enhanced = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
     RuntimeMappingContext = NewObject<UInputMappingContext>(this);
 
-    auto BindDigital = [this, Enhanced](FKey Key, void (ADriftsteadCharacter::*Pressed)(), void (ADriftsteadCharacter::*Released)())
+    auto BindDigital = [this, Enhanced](FKey Key, void (ADriftsteadCharacter::*Pressed)(), void (ADriftsteadCharacter::*Released)(), bool bWhilePaused = false)
     {
         UInputAction* Action = CreateBooleanAction(Key);
+        Action->bTriggerWhenPaused = bWhilePaused;
         Enhanced->BindAction(Action, ETriggerEvent::Started, this, Pressed);
         if (Released) Enhanced->BindAction(Action, ETriggerEvent::Completed, this, Released);
     };
@@ -156,10 +181,11 @@ void ADriftsteadCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
     BindDigital(EKeys::S, &ADriftsteadCharacter::MoveBackwardOn, &ADriftsteadCharacter::MoveBackwardOff);
     BindDigital(EKeys::A, &ADriftsteadCharacter::MoveLeftOn, &ADriftsteadCharacter::MoveLeftOff);
     BindDigital(EKeys::D, &ADriftsteadCharacter::MoveRightOn, &ADriftsteadCharacter::MoveRightOff);
-    BindDigital(EKeys::LeftMouseButton, &ADriftsteadCharacter::StartHook, &ADriftsteadCharacter::ReleaseHook);
+    BindDigital(EKeys::LeftMouseButton, &ADriftsteadCharacter::StartHook, &ADriftsteadCharacter::ReleaseHook, true);
     BindDigital(EKeys::RightMouseButton, &ADriftsteadCharacter::RecallHook, nullptr);
     BindDigital(EKeys::SpaceBar, &ADriftsteadCharacter::RecallHook, nullptr);
     BindDigital(EKeys::E, &ADriftsteadCharacter::Interact, nullptr);
+    BindDigital(EKeys::U, &ADriftsteadCharacter::UpgradeAtWorkbench, nullptr);
     BindDigital(EKeys::Tab, &ADriftsteadCharacter::ToggleInventory, nullptr);
     BindDigital(EKeys::R, &ADriftsteadCharacter::RotateSelection, nullptr);
     BindDigital(EKeys::B, &ADriftsteadCharacter::RecoverFirstBasketItem, nullptr);
@@ -170,14 +196,17 @@ void ADriftsteadCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
     BindDigital(EKeys::F2, &ADriftsteadCharacter::ChangeRaftLevel, nullptr);
     BindDigital(EKeys::F3, &ADriftsteadCharacter::SpawnDebugItems, nullptr);
     BindDigital(EKeys::F4, &ADriftsteadCharacter::ChangeFloor, nullptr);
-    BindDigital(EKeys::F5, &ADriftsteadCharacter::QuickSave, nullptr);
+    UInputAction* SaveAction = CreateBooleanAction(EKeys::F5);
+    SaveAction->bTriggerWhenPaused = true;
+    Enhanced->BindAction(SaveAction, ETriggerEvent::Started, this, &ADriftsteadCharacter::QuickSave);
     BindDigital(EKeys::F6, &ADriftsteadCharacter::ToggleDeveloperPanel, nullptr);
     BindDigital(EKeys::F9, &ADriftsteadCharacter::ConfirmResetSave, nullptr);
-    BindDigital(EKeys::Enter, &ADriftsteadCharacter::StartGameFromMenu, nullptr);
-    BindDigital(EKeys::N, &ADriftsteadCharacter::StartNewNormalGame, nullptr);
-    BindDigital(EKeys::C, &ADriftsteadCharacter::ContinueNormalGame, nullptr);
-    BindDigital(EKeys::H, &ADriftsteadCharacter::StartShowcaseGame, nullptr);
-    BindDigital(EKeys::Q, &ADriftsteadCharacter::QuitFromMenu, nullptr);
+    BindDigital(EKeys::Enter, &ADriftsteadCharacter::StartGameFromMenu, nullptr, true);
+    BindDigital(EKeys::N, &ADriftsteadCharacter::StartNewNormalGame, nullptr, true);
+    BindDigital(EKeys::C, &ADriftsteadCharacter::ContinueNormalGame, nullptr, true);
+    BindDigital(EKeys::H, &ADriftsteadCharacter::StartShowcaseGame, nullptr, true);
+    BindDigital(EKeys::Q, &ADriftsteadCharacter::QuitFromMenu, nullptr, true);
+    BindDigital(EKeys::M, &ADriftsteadCharacter::RequestReturnToMainMenu, nullptr, true);
 
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
@@ -191,11 +220,13 @@ void ADriftsteadCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 
 void ADriftsteadCharacter::UpdateAim()
 {
+    if (FParse::Param(FCommandLine::Get(), TEXT("DriftsteadMenuTest"))) return;
+    if (IsGameplayInputBlocked(true) || FParse::Param(FCommandLine::Get(), TEXT("DriftsteadCapture")) || FParse::Param(FCommandLine::Get(), TEXT("DriftsteadSmokeTest")) || FParse::Param(FCommandLine::Get(), TEXT("DriftsteadOpeningTest"))) return;
     APlayerController* PC = Cast<APlayerController>(GetController());
     if (!PC) return;
     FVector Origin, Direction;
     if (!PC->DeprojectMousePositionToWorld(Origin, Direction)) return;
-    const FPlane Plane(FVector(0, 0, GetActorLocation().Z), FVector::UpVector);
+    const FPlane Plane(FVector(0, 0, 35.0f), FVector::UpVector);
     const FVector Target = FMath::LinePlaneIntersection(Origin, Origin + Direction * 100000.0f, Plane);
     FVector Aim = Target - GetActorLocation(); Aim.Z = 0.0f;
     if (!Aim.IsNearlyZero())
@@ -213,6 +244,7 @@ bool ADriftsteadCharacter::IsShiftDown() const
 
 bool ADriftsteadCharacter::IsGameplayInputBlocked(bool bIncludeInventory) const
 {
+    if (bReturnToMenuPending) return true;
     const APlayerController* PC = Cast<APlayerController>(GetController());
     const ADriftsteadHUD* HUD = PC ? Cast<ADriftsteadHUD>(PC->GetHUD()) : nullptr;
     return HUD && (HUD->IsMainMenuOpen() || HUD->IsPausePanelOpen() || (bIncludeInventory && HUD->IsInventoryOpen()));
@@ -230,19 +262,22 @@ void ADriftsteadCharacter::StartHook()
 {
     if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr)
     {
-        if (HUD->IsMainMenuOpen() || HUD->IsPausePanelOpen()) return;
+        if (HUD->IsMainMenuOpen()) { HUD->HandleMenuClick(); return; }
+        if (HUD->IsPausePanelOpen()) { HUD->HandlePauseClick(); return; }
         if (HUD->IsInventoryOpen())
         {
             HUD->BeginInventoryDrag();
             return;
         }
     }
+    if (IsGameplayInputBlocked(true)) return;
+    bHookPressOwned = true;
     Hook->StartCharging();
-    if (UDriftsteadQuestSubsystem* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->NotifyEvent(EDriftsteadQuestStep::ChargeHook);
 }
 
 void ADriftsteadCharacter::ReleaseHook()
 {
+    if (IsGameplayInputBlocked()) { bHookPressOwned = false; return; }
     if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr)
     {
         if (HUD->IsDraggingInventoryItem())
@@ -252,13 +287,13 @@ void ADriftsteadCharacter::ReleaseHook()
         }
         if (HUD->IsInventoryOpen()) return;
     }
-    Hook->ReleaseHook();
+    if (bHookPressOwned) Hook->ReleaseHook();
+    bHookPressOwned = false;
 }
 void ADriftsteadCharacter::RecallHook() { if (!IsGameplayInputBlocked(true)) Hook->RecallHook(); }
 
-void ADriftsteadCharacter::Interact()
+void ADriftsteadCharacter::UpdateInteractionTarget()
 {
-    if (IsGameplayInputBlocked(true)) return;
     TArray<FOverlapResult> Results;
     FCollisionQueryParams Query(SCENE_QUERY_STAT(DriftsteadInteraction), false, this);
     GetWorld()->OverlapMultiByChannel(Results, GetActorLocation(), FQuat::Identity, ECC_WorldDynamic, FCollisionShape::MakeSphere(180.0f), Query);
@@ -272,19 +307,45 @@ void ADriftsteadCharacter::Interact()
         const float Distance = FVector::DistSquared(GetActorLocation(), Candidate->GetActorLocation());
         if (Distance < BestDistance) { Best = Candidate; BestDistance = Distance; }
     }
-    if (Best) IInteractableInterface::Execute_Interact(Best, this);
+    InteractionTarget = Best;
+}
+
+void ADriftsteadCharacter::Interact()
+{
+    if (IsGameplayInputBlocked(true)) return;
+    UpdateInteractionTarget();
+    if (InteractionTarget.IsValid()) IInteractableInterface::Execute_Interact(InteractionTarget.Get(), this);
     else ShowFeedback(NSLOCTEXT("Driftstead", "NoInteraction", "附近没有可交互的对象。"), FLinearColor::Yellow);
+}
+
+void ADriftsteadCharacter::UpgradeAtWorkbench()
+{
+    if (IsGameplayInputBlocked(true)) return;
+    UpdateInteractionTarget();
+    if (auto* Facility = Cast<AFacilityActor>(InteractionTarget.Get()))
+        if (Facility->GetFacilityType() == EFacilityType::Workbench) { Facility->TryUpgrade(this); return; }
+    ShowFeedback(FText::FromString(TEXT("靠近工作台后按 U 扩建。")), FLinearColor::Yellow);
+}
+
+void ADriftsteadCharacter::SelectMenuOption(int32 Option)
+{
+    if (Option == 0) StartNewNormalGame();
+    else if (Option == 1) ContinueNormalGame();
+    else if (Option == 2) StartShowcaseGame();
 }
 
 void ADriftsteadCharacter::ToggleInventory()
 {
     if (IsGameplayInputBlocked()) return;
+    ResetTransientInput();
+    if (Hook->GetHookState() == EHookState::Charging) Hook->RecallHook();
     if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr) HUD->ToggleInventory();
     if (UDriftsteadQuestSubsystem* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->NotifyEvent(EDriftsteadQuestStep::OpenInventory);
 }
 
 void ADriftsteadCharacter::RotateSelection()
 {
+    if (IsGameplayInputBlocked()) return;
     if (Inventory->GetEntries().Num() == 0)
     {
         ShowFeedback(NSLOCTEXT("Driftstead", "RotateEmpty", "背包是空的。"), FLinearColor::Yellow);
@@ -318,6 +379,7 @@ void ADriftsteadCharacter::RotateSelection()
 
 void ADriftsteadCharacter::RecoverFirstBasketItem()
 {
+    if (IsGameplayInputBlocked()) return;
     if (Inventory->GetRecoveryBasket().Num() == 0)
     {
         ShowFeedback(NSLOCTEXT("Driftstead", "BasketEmpty", "临时回收篮是空的。"), FLinearColor::Yellow);
@@ -329,23 +391,97 @@ void ADriftsteadCharacter::RecoverFirstBasketItem()
 
 void ADriftsteadCharacter::TogglePause()
 {
+    if (bReturnToMenuPending) return;
     if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr)
     {
         if (HUD->IsMainMenuOpen()) return;
+        if (HUD->IsInventoryOpen()) { HUD->SetInventoryOpen(false); return; }
+        ResetTransientInput();
+        if (Hook->GetHookState() == EHookState::Charging) Hook->RecallHook();
         HUD->TogglePausePanel();
         UGameplayStatics::SetGamePaused(this, HUD->IsPausePanelOpen());
     }
 }
 
-void ADriftsteadCharacter::AddDebugResources() { Inventory->AddTestResources(50); ShowFeedback(NSLOCTEXT("Driftstead", "DebugResources", "已添加测试资源。"), FLinearColor::Yellow); }
-void ADriftsteadCharacter::ChangeRaftLevel() { if (ADriftsteadGameMode* GM = GetWorld()->GetAuthGameMode<ADriftsteadGameMode>()) GM->DebugChangeRaftLevel(IsShiftDown() ? -1 : 1); }
-void ADriftsteadCharacter::SpawnDebugItems() { if (ADriftsteadGameMode* GM = GetWorld()->GetAuthGameMode<ADriftsteadGameMode>()) GM->SpawnDebugItems(); }
-void ADriftsteadCharacter::ChangeFloor() { SetCurrentFloor(CurrentFloor + (IsShiftDown() ? -1 : 1)); }
-void ADriftsteadCharacter::QuickSave() { if (UDriftsteadGameInstance* GI = Cast<UDriftsteadGameInstance>(GetGameInstance())) GI->SaveCurrentGame(); }
-void ADriftsteadCharacter::ToggleDeveloperPanel() { if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr) HUD->ToggleDeveloperPanel(); }
+void ADriftsteadCharacter::ResetTransientInput()
+{
+    bForward = bBackward = bLeft = bRight = false;
+    bHookPressOwned = bResetArmed = false;
+    InteractionTarget.Reset();
+    ConsumeMovementInputVector();
+    GetCharacterMovement()->StopMovementImmediately();
+}
+
+void ADriftsteadCharacter::SelectPauseOption(int32 Option)
+{
+    auto* PC = GetController<APlayerController>();
+    auto* HUD = PC ? Cast<ADriftsteadHUD>(PC->GetHUD()) : nullptr;
+    if (!HUD || !HUD->IsPausePanelOpen() || HUD->IsMainMenuOpen()) return;
+    if (Option == 0) TogglePause();
+    else if (Option == 1) QuickSave();
+    else if (Option == 2) RequestReturnToMainMenu();
+}
+
+void ADriftsteadCharacter::RequestReturnToMainMenu()
+{
+    auto* PC = GetController<APlayerController>();
+    auto* HUD = PC ? Cast<ADriftsteadHUD>(PC->GetHUD()) : nullptr;
+    if (!HUD || !HUD->IsPausePanelOpen() || HUD->IsMainMenuOpen() || bReturnToMenuPending) return;
+    ResetTransientInput();
+    HUD->ResetTransientUI();
+    bReturnToMenuPending = true;
+    // Keep the current world alive until all attached cargo reaches the backpack.
+    UGameplayStatics::SetGamePaused(this, false);
+    Hook->RecallHook();
+    if (Hook->GetHookState() == EHookState::Idle || Hook->GetHookState() == EHookState::Cooldown) FinishReturnToMainMenu();
+    else ShowFeedback(FText::FromString(TEXT("正在收回钩子和物资，随后保存并返回主菜单……")), FLinearColor(1,.8f,.43f));
+}
+
+void ADriftsteadCharacter::FinishReturnToMainMenu()
+{
+    auto* PC = GetController<APlayerController>();
+    auto* HUD = PC ? Cast<ADriftsteadHUD>(PC->GetHUD()) : nullptr;
+    auto* GI = Cast<UDriftsteadGameInstance>(GetGameInstance());
+    bReturnToMenuPending = false;
+    ResetTransientInput();
+    if (HUD && GI && GI->SaveCurrentGame())
+    {
+        bSuspendedSession = true;
+        HUD->OpenMainMenu();
+    }
+    else if (HUD)
+    {
+        if (!HUD->IsPausePanelOpen()) HUD->TogglePausePanel();
+        ShowFeedback(FText::FromString(TEXT("保存失败，已保留当前航程。请重试或继续游戏。")), FLinearColor::Red);
+    }
+    UGameplayStatics::SetGamePaused(this, true);
+}
+
+void ADriftsteadCharacter::AddDebugResources()
+{
+    if (IsGameplayInputBlocked()) return;
+    Inventory->AddTestResources(100);
+    ShowFeedback(NSLOCTEXT("Driftstead", "ResourceSupply100", "补给已到账：全部 9 种资源各 +100。"), FLinearColor::Yellow);
+    if (FParse::Param(FCommandLine::Get(), TEXT("DriftsteadManualQA")))
+    {
+        for (const auto& Resource : Inventory->GetResources())
+            UE_LOG(LogTemp, Display, TEXT("[ManualQA] F1 supply %s=%d"), *Resource.Key.ToString(), Resource.Value);
+    }
+}
+void ADriftsteadCharacter::ChangeRaftLevel() { if (IsGameplayInputBlocked()) return; if (ADriftsteadGameMode* GM = GetWorld()->GetAuthGameMode<ADriftsteadGameMode>()) GM->DebugChangeRaftLevel(IsShiftDown() ? -1 : 1); }
+void ADriftsteadCharacter::SpawnDebugItems() { if (IsGameplayInputBlocked()) return; if (ADriftsteadGameMode* GM = GetWorld()->GetAuthGameMode<ADriftsteadGameMode>()) GM->SpawnDebugItems(); }
+void ADriftsteadCharacter::ChangeFloor() { if (IsGameplayInputBlocked()) return; SetCurrentFloor(CurrentFloor + (IsShiftDown() ? -1 : 1)); }
+void ADriftsteadCharacter::QuickSave()
+{
+    if (bReturnToMenuPending) return;
+    if (const auto* PC=GetController<APlayerController>()) if (const auto* HUD=Cast<ADriftsteadHUD>(PC->GetHUD())) if (HUD->IsMainMenuOpen()) return;
+    if (UDriftsteadGameInstance* GI = Cast<UDriftsteadGameInstance>(GetGameInstance())) GI->SaveCurrentGame();
+}
+void ADriftsteadCharacter::ToggleDeveloperPanel() { if (IsGameplayInputBlocked()) return; if (ADriftsteadHUD* HUD = GetController<APlayerController>() ? Cast<ADriftsteadHUD>(GetController<APlayerController>()->GetHUD()) : nullptr) HUD->ToggleDeveloperPanel(); }
 
 void ADriftsteadCharacter::ConfirmResetSave()
 {
+    if (IsGameplayInputBlocked()) return;
     if (!bResetArmed)
     {
         bResetArmed = true;
@@ -373,19 +509,23 @@ void ADriftsteadCharacter::QuitFromMenu()
 
 void ADriftsteadCharacter::ResetRuntimeForMode(bool bShowcase)
 {
+    ResetTransientInput();
+    bSuspendedSession = bReturnToMenuPending = false;
+    UGameplayStatics::SetGamePaused(this, false);
+    if (auto* PC = GetController<APlayerController>()) if (auto* HUD = Cast<ADriftsteadHUD>(PC->GetHUD())) HUD->ResetTransientUI();
     UDriftsteadGameInstance* GI = Cast<UDriftsteadGameInstance>(GetGameInstance());
     if (GI) GI->StartNewGame(bShowcase);
 
     TArray<FInventoryEntry> EmptyEntries;
     TMap<FName, int32> StartingResources;
-    StartingResources.Add(TEXT("Wood"), bShowcase ? 250 : 8);
-    StartingResources.Add(TEXT("Rope"), bShowcase ? 250 : 3);
+    StartingResources.Add(TEXT("Wood"), bShowcase ? 250 : 2);
+    StartingResources.Add(TEXT("Rope"), bShowcase ? 250 : 1);
     if (bShowcase)
     {
         for (const FName Resource : {FName(TEXT("Metal")), FName(TEXT("Cloth")), FName(TEXT("Seeds")), FName(TEXT("Food")), FName(TEXT("Water")), FName(TEXT("Parts")), FName(TEXT("Power"))}) StartingResources.Add(Resource, 250);
     }
     Inventory->RestoreState(bShowcase ? 12 : 6, bShowcase ? 8 : 4, EmptyEntries, EmptyEntries, StartingResources);
-    if (ADriftsteadGameMode* GM = GetWorld()->GetAuthGameMode<ADriftsteadGameMode>()) GM->SetRaftLevelFromSave(bShowcase ? 10 : 1);
+    if (ADriftsteadGameMode* GM = GetWorld()->GetAuthGameMode<ADriftsteadGameMode>()) { GM->SetRaftLevelFromSave(bShowcase ? 10 : 1); GM->RestoreFacilityStates({}); GM->ResetOpeningSupplies(); }
     bMoveQuestNotified = false;
     SetCurrentFloor(0);
     SetActorLocation(FVector(0, 0, 125), false, nullptr, ETeleportType::TeleportPhysics);
@@ -395,12 +535,22 @@ void ADriftsteadCharacter::ResetRuntimeForMode(bool bShowcase)
 
 void ADriftsteadCharacter::StartNewNormalGame()
 {
-    UGameplayStatics::DeleteGameInSlot(TEXT("Driftstead_Normal"), 0);
+    if (const auto* PC = GetController<APlayerController>()) if (const auto* HUD = Cast<ADriftsteadHUD>(PC->GetHUD())) if (!HUD->IsMainMenuOpen()) return;
     ResetRuntimeForMode(false);
 }
 
 void ADriftsteadCharacter::ContinueNormalGame()
 {
+    if (const auto* PC = GetController<APlayerController>()) if (const auto* HUD = Cast<ADriftsteadHUD>(PC->GetHUD())) if (!HUD->IsMainMenuOpen()) return;
+    ResetTransientInput();
+    UGameplayStatics::SetGamePaused(this, false);
+    if (bSuspendedSession)
+    {
+        bSuspendedSession = false;
+        if (auto* PC = GetController<APlayerController>()) if (auto* HUD = Cast<ADriftsteadHUD>(PC->GetHUD())) { HUD->ResetTransientUI(); HUD->CloseMainMenu(); }
+        ShowFeedback(FText::FromString(TEXT("已继续当前航程。")), FLinearColor::Green);
+        return;
+    }
     UDriftsteadGameInstance* GI = Cast<UDriftsteadGameInstance>(GetGameInstance());
     if (GI) GI->StartNewGame(false);
     if (!GI || !GI->LoadCurrentGame()) ResetRuntimeForMode(false);
@@ -409,6 +559,7 @@ void ADriftsteadCharacter::ContinueNormalGame()
 
 void ADriftsteadCharacter::StartShowcaseGame()
 {
+    if (const auto* PC = GetController<APlayerController>()) if (const auto* HUD = Cast<ADriftsteadHUD>(PC->GetHUD())) if (!HUD->IsMainMenuOpen()) return;
     ResetRuntimeForMode(true);
 }
 

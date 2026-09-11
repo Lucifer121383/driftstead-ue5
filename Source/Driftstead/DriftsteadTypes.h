@@ -62,7 +62,10 @@ enum class EDriftsteadQuestStep : uint8
     HarvestCrop,
     UpgradeLevel4,
     ReachSecondFloor,
-    Complete
+    Complete,
+    CollectWater,
+    UpgradeLevel3,
+    RepairSignal
 };
 
 USTRUCT(BlueprintType)
@@ -108,6 +111,7 @@ struct FFacilitySaveState
     UPROPERTY(EditAnywhere, BlueprintReadOnly) int32 FloorIndex = 0;
     UPROPERTY(EditAnywhere, BlueprintReadOnly) int32 StoredOutput = 0;
     UPROPERTY(EditAnywhere, BlueprintReadOnly) bool bProducing = false;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly) float GrowthSecondsRemaining = -1.0f;
     UPROPERTY(EditAnywhere, BlueprintReadOnly) int32 StorageColumns = 8;
     UPROPERTY(EditAnywhere, BlueprintReadOnly) int32 StorageRows = 4;
     UPROPERTY(EditAnywhere, BlueprintReadOnly) TArray<FInventoryEntry> StorageEntries;

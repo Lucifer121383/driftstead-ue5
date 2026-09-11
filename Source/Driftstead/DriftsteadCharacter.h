@@ -28,12 +28,20 @@ public:
     UFUNCTION(BlueprintPure, Category="Driftstead") int32 GetCurrentFloor() const { return CurrentFloor; }
     UFUNCTION(BlueprintCallable, Category="Driftstead") void SetCurrentFloor(int32 NewFloor, bool bTeleport = true);
     void ShowFeedback(const FText& Message, FLinearColor Color = FLinearColor::White) const;
+    AActor* GetInteractionTarget() const { return InteractionTarget.Get(); }
+    void SelectMenuOption(int32 Option);
+    void SelectPauseOption(int32 Option);
+    void RequestReturnToMainMenu();
+    bool IsReturnToMenuPending() const { return bReturnToMenuPending; }
+    bool HasSuspendedSession() const { return bSuspendedSession; }
 
 private:
     UInputAction* CreateBooleanAction(FKey Key);
     bool IsShiftDown() const;
     bool IsGameplayInputBlocked(bool bIncludeInventory = false) const;
     void UpdateAim();
+    void UpdateInteractionTarget();
+    void UpgradeAtWorkbench();
     void MoveForwardOn(); void MoveForwardOff();
     void MoveBackwardOn(); void MoveBackwardOff();
     void MoveLeftOn(); void MoveLeftOff();
@@ -45,6 +53,8 @@ private:
     void QuickSave(); void ToggleDeveloperPanel(); void ConfirmResetSave(); void StartGameFromMenu(); void QuitFromMenu();
     void StartNewNormalGame(); void ContinueNormalGame(); void StartShowcaseGame();
     void ResetRuntimeForMode(bool bShowcase);
+    void ResetTransientInput();
+    void FinishReturnToMainMenu();
 
     UPROPERTY(VisibleAnywhere, Category="Camera") TObjectPtr<USpringArmComponent> CameraBoom;
     UPROPERTY(VisibleAnywhere, Category="Camera") TObjectPtr<UCameraComponent> Camera;
@@ -63,6 +73,13 @@ private:
     bool bRight = false;
     bool bResetArmed = false;
     bool bMoveQuestNotified = false;
+    bool bReturnToMenuPending = false;
+    bool bSuspendedSession = false;
+    bool bHookPressOwned = false;
     double ResetArmTime = 0.0;
     int32 CurrentFloor = 0;
+    TWeakObjectPtr<AActor> InteractionTarget;
+    FTimerHandle InteractionTimer;
+    FVector SailorRestLocation = FVector::ZeroVector;
+    bool bImportedSailor = false;
 };

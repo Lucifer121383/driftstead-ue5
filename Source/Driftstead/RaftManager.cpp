@@ -7,6 +7,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
+#include "DemoArt.h"
 
 ARaftManager::ARaftManager()
 {
@@ -37,6 +38,10 @@ ARaftManager::ARaftManager()
 void ARaftManager::BeginPlay()
 {
     Super::BeginPlay();
+    if (UStaticMesh* Planks = DriftsteadArt::Load(TEXT("platform_planks")))
+        for (UInstancedStaticMeshComponent* Floor : {FloorOne, FloorTwo, FloorThree}) { Floor->SetStaticMesh(Planks); Floor->EmptyOverrideMaterials(); }
+    if (UStaticMesh* Fence = DriftsteadArt::Load(TEXT("structure_fence")))
+        for (UInstancedStaticMeshComponent* Rails : {RailsOne, RailsTwo, RailsThree}) { Rails->SetStaticMesh(Fence); Rails->EmptyOverrideMaterials(); }
     GenerateRaft();
 }
 
@@ -99,6 +104,7 @@ void ARaftManager::GenerateRaft()
 {
     const FRaftLevelDefinition* Definition = FRaftProgressionCatalog::Find(RaftLevel);
     if (!Definition) return;
+    const TArray<FFacilitySaveState> PreviousFacilities = CaptureFacilityStates();
     DestroyGeneratedActors();
     FloorOne->ClearInstances(); FloorTwo->ClearInstances(); FloorThree->ClearInstances();
     RailsOne->ClearInstances(); RailsTwo->ClearInstances(); RailsThree->ClearInstances();
@@ -106,6 +112,7 @@ void ARaftManager::GenerateRaft()
     GenerateFloor(FloorTwo, RailsTwo, Definition->SecondFloor, 1);
     GenerateFloor(FloorThree, RailsThree, Definition->ThirdFloor, 2);
     SpawnFacilities(*Definition);
+    RestoreFacilityStates(PreviousFacilities);
     SetViewedFloor(ViewedFloor);
 }
 
@@ -113,12 +120,19 @@ void ARaftManager::GenerateFloor(UInstancedStaticMeshComponent* Floor, UInstance
 {
     if (Dimensions.X <= 0 || Dimensions.Y <= 0) return;
     const float Z = FloorIndex * FloorHeight;
+    auto AddFitted = [](UInstancedStaticMeshComponent* Mesh, const FVector& Center, const FVector& Size, FRotator Rotation)
+    {
+        const FBoxSphereBounds Bounds = Mesh->GetStaticMesh()->GetBounds();
+        const FVector Extent = Bounds.BoxExtent * 2.0f;
+        const FVector Scale(Size.X / FMath::Max(Extent.X,1.0f), Size.Y / FMath::Max(Extent.Y,1.0f), Size.Z / FMath::Max(Extent.Z,1.0f));
+        Mesh->AddInstance(FTransform(Rotation, Center - Rotation.RotateVector(Bounds.Origin * Scale), Scale));
+    };
     for (int32 Y = 0; Y < Dimensions.Y; ++Y)
     {
         for (int32 X = 0; X < Dimensions.X; ++X)
         {
             const FVector Position((X - (Dimensions.X - 1) * 0.5f) * TileSize, (Y - (Dimensions.Y - 1) * 0.5f) * TileSize, Z);
-            Floor->AddInstance(FTransform(FRotator::ZeroRotator, Position, FVector(TileSize / 100.0f * 0.98f, TileSize / 100.0f * 0.98f, 0.20f)));
+            AddFitted(Floor, Position, FVector(TileSize*.98f, TileSize*.98f, 20), FRotator::ZeroRotator);
         }
     }
     for (int32 X = 0; X < Dimensions.X; ++X)
@@ -126,7 +140,7 @@ void ARaftManager::GenerateFloor(UInstancedStaticMeshComponent* Floor, UInstance
         for (int32 EdgeY : {0, Dimensions.Y - 1})
         {
             const FVector P((X - (Dimensions.X - 1) * 0.5f) * TileSize, (EdgeY - (Dimensions.Y - 1) * 0.5f) * TileSize, Z + 65.0f);
-            Rails->AddInstance(FTransform(FRotator::ZeroRotator, P, FVector(TileSize / 100.0f, 0.10f, 0.62f)));
+            AddFitted(Rails, P - FVector(0,0,22), FVector(TileSize, 12, 46), FRotator::ZeroRotator);
         }
     }
     for (int32 Y = 1; Y < Dimensions.Y - 1; ++Y)
@@ -134,7 +148,7 @@ void ARaftManager::GenerateFloor(UInstancedStaticMeshComponent* Floor, UInstance
         for (int32 EdgeX : {0, Dimensions.X - 1})
         {
             const FVector P((EdgeX - (Dimensions.X - 1) * 0.5f) * TileSize, (Y - (Dimensions.Y - 1) * 0.5f) * TileSize, Z + 65.0f);
-            Rails->AddInstance(FTransform(FRotator::ZeroRotator, P, FVector(0.10f, TileSize / 100.0f, 0.62f)));
+            AddFitted(Rails, P - FVector(0,0,22), FVector(TileSize, 12, 46), FRotator(0,90,0));
         }
     }
 }
@@ -144,10 +158,14 @@ void ARaftManager::SpawnFacilities(const FRaftLevelDefinition& Definition)
     const int32 MaxFloor = GetMaximumFloor();
     for (int32 Index = 0; Index < Definition.Facilities.Num(); ++Index)
     {
-        const int32 FloorIndex = MaxFloor > 0 ? Index % (MaxFloor + 1) : 0;
+        const EFacilityType Type = Definition.Facilities[Index];
+        const int32 FloorIndex = MaxFloor > 0 && (Type == EFacilityType::StorageLocker || Type == EFacilityType::Lighthouse) ? 1 : 0;
         const float Angle = Index * 2.399963f;
         const float Radius = 180.0f + Index * 35.0f;
-        const FVector Location(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, FloorIndex * FloorHeight + 35.0f);
+        static const TArray<FVector2D> Stations = {FVector2D(160,-150),FVector2D(-160,-160),FVector2D(-240,160),FVector2D(210,240),FVector2D(0,300),FVector2D(100,-120)};
+        FVector2D Position = Index < Stations.Num() ? Stations[Index] : FVector2D(FMath::Cos(Angle)*Radius,FMath::Sin(Angle)*Radius);
+        if (Type == EFacilityType::Lighthouse) Position = FVector2D(100,100);
+        const FVector Location(Position.X, Position.Y, FloorIndex * FloorHeight + 25.0f);
         AFacilityActor* Facility = GetWorld()->SpawnActor<AFacilityActor>(AFacilityActor::StaticClass(), Location, FRotator(0, FMath::RadiansToDegrees(Angle), 0));
         if (Facility)
         {

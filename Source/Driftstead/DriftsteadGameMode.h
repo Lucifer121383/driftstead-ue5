@@ -27,11 +27,15 @@ public:
     UFUNCTION(BlueprintCallable, Category="Debug") void SpawnDebugItems();
     TArray<FFacilitySaveState> CaptureFacilityStates() const;
     void RestoreFacilityStates(const TArray<FFacilitySaveState>& States);
+    void ResetOpeningSupplies();
+    FString GetUpgradeSummary(UInventoryComponent* Inventory) const;
 
 private:
     void BuildRuntimeWorld();
     void ApplyInventoryCapacityForLevel();
     void RunSmokeStep();
+    void RunOpeningStep();
+    void BeginMenuValidation();
     void RunCaptureStep();
     void CaptureFrame(const FString& Filename);
     UPROPERTY() TObjectPtr<ARaftManager> RaftManager;
@@ -46,5 +50,11 @@ private:
     bool bSmokeFailed = false;
     FTimerHandle SmokeTimer;
     int32 CaptureStep = 0;
+    int32 CaptureHookWaitTicks = 0;
     FTimerHandle CaptureTimer;
+    int32 OpeningStep = 0;
+    int32 OpeningWait = 0;
+    float OpeningGrowthRemaining = 0;
+    bool bOpeningFailed = false;
+    FTimerHandle OpeningTimer;
 };

@@ -22,6 +22,12 @@
 #include "HAL/FileManager.h"
 #include "TimerManager.h"
 #include "UnrealClient.h"
+#include "DemoArt.h"
+#include "Engine/SkyLight.h"
+#include "Components/SkyLightComponent.h"
+#include "FacilityActor.h"
+#include "StairActor.h"
+#include "EngineUtils.h"
 
 ADriftsteadGameMode::ADriftsteadGameMode()
 {
@@ -40,12 +46,18 @@ void ADriftsteadGameMode::BeginPlay()
     }
     const bool bSmokeTest = FParse::Param(FCommandLine::Get(), TEXT("DriftsteadSmokeTest"));
     const bool bCaptureScreenshots = FParse::Param(FCommandLine::Get(), TEXT("DriftsteadCapture"));
+    const bool bOpeningTest = FParse::Param(FCommandLine::Get(), TEXT("DriftsteadOpeningTest"));
+    const bool bMenuTest = FParse::Param(FCommandLine::Get(), TEXT("DriftsteadMenuTest"));
+    const bool bManualQA = FParse::Param(FCommandLine::Get(), TEXT("DriftsteadManualQA"));
     if (UDriftsteadGameInstance* GI = Cast<UDriftsteadGameInstance>(GetGameInstance()))
     {
-        GI->SetAutomationMode(bSmokeTest || bCaptureScreenshots);
-        if (bSmokeTest || bCaptureScreenshots) GI->DeleteAutomationSave();
+        GI->SetAutomationMode(bSmokeTest || bCaptureScreenshots || bOpeningTest || bMenuTest || bManualQA);
+        if (bSmokeTest || bCaptureScreenshots || bOpeningTest || bMenuTest) GI->DeleteAutomationSave();
     }
-    if (bSmokeTest)
+    if (bMenuTest) BeginMenuValidation();
+    else if (bOpeningTest)
+        GetWorldTimerManager().SetTimer(OpeningTimer, this, &ADriftsteadGameMode::RunOpeningStep, .25f, true, .25f);
+    else if (bSmokeTest)
     {
         if (IsValid(ItemSpawner)) ItemSpawner->Destroy();
         ItemSpawner = nullptr;
@@ -53,9 +65,7 @@ void ADriftsteadGameMode::BeginPlay()
     }
     else if (bCaptureScreenshots)
     {
-        if (IsValid(ItemSpawner)) ItemSpawner->Destroy();
-        ItemSpawner = nullptr;
-        GetWorldTimerManager().SetTimer(CaptureTimer, this, &ADriftsteadGameMode::RunCaptureStep, 0.45f, true, 1.0f);
+        GetWorldTimerManager().SetTimer(CaptureTimer, this, &ADriftsteadGameMode::RunCaptureStep, 0.2f, true, 10.0f);
     }
 }
 
@@ -64,14 +74,14 @@ void ADriftsteadGameMode::BuildRuntimeWorld()
     RaftManager = GetWorld()->SpawnActor<ARaftManager>(ARaftManager::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator);
     ItemSpawner = GetWorld()->SpawnActor<ADriftItemSpawner>(ADriftItemSpawner::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator);
 
-    AStaticMeshActor* Ocean = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FVector(0, 0, -65), FRotator::ZeroRotator);
+    AStaticMeshActor* Ocean = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FVector(0, 0, -32), FRotator::ZeroRotator);
     if (Ocean)
     {
         UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
         Ocean->GetStaticMeshComponent()->SetStaticMesh(Cube);
-        Ocean->GetStaticMeshComponent()->SetWorldScale3D(FVector(45, 45, 0.12f));
+        Ocean->GetStaticMeshComponent()->SetWorldScale3D(FVector(180, 180, 0.12f));
         Ocean->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Driftstead/Materials/M_Water.M_Water"));
+        UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Driftstead/Art/M_Ocean.M_Ocean"));
         if (Base)
         {
             UMaterialInstanceDynamic* Water = UMaterialInstanceDynamic::Create(Base, Ocean);
@@ -87,8 +97,41 @@ void ADriftsteadGameMode::BuildRuntimeWorld()
     if (Sun)
     {
         Sun->GetLightComponent()->SetMobility(EComponentMobility::Movable);
-        Sun->GetLightComponent()->SetIntensity(7.0f);
+        Sun->GetLightComponent()->SetIntensity(3.0f);
     }
+    ASkyLight* Sky = GetWorld()->SpawnActor<ASkyLight>();
+    if (Sky) { Sky->GetLightComponent()->SetMobility(EComponentMobility::Movable); Sky->GetLightComponent()->SetIntensity(.7f); }
+    ADirectionalLight* Fill = GetWorld()->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(), FVector(0,0,800), FRotator(-65,140,0));
+    if (Fill) { Fill->GetLightComponent()->SetMobility(EComponentMobility::Movable); Fill->GetLightComponent()->SetIntensity(1.1f); Fill->GetLightComponent()->SetCastShadows(false); }
+    auto Prop = [this](const TCHAR* Name, FVector Location, float Size, float Yaw)
+    {
+        auto* Actor = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Location, FRotator(0,Yaw,0));
+        if (Actor) { Actor->SetMobility(EComponentMobility::Movable); DriftsteadArt::Fit(Actor->GetStaticMeshComponent(), Name, Size); Actor->SetActorLocation(Location); Actor->SetActorEnableCollision(false); }
+    };
+    Prop(TEXT("patch_sand"), FVector(-730,-820,-15), 680, 0);
+    Prop(TEXT("palm_bend"), FVector(-670,-760,0), 390, 25);
+    Prop(TEXT("palm_straight"), FVector(-860,-880,0), 300, -40);
+    Prop(TEXT("rocks_a"), FVector(-540,-840,-10), 190, 20);
+    Prop(TEXT("ship_wreck"), FVector(550,850,-15), 480, -28);
+}
+
+void ADriftsteadGameMode::ResetOpeningSupplies() { if (ItemSpawner) ItemSpawner->ResetOpening(); }
+
+FString ADriftsteadGameMode::GetUpgradeSummary(UInventoryComponent* Inventory) const
+{
+    const auto* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>();
+    if (GetRaftLevel() == 4 && Quest && !Quest->IsComplete() && Inventory)
+        return FString::Printf(TEXT("修复二层求救信标\n木材 %d/30  金属 %d/16\n布料 %d/12  零件 %d/6\n淡水 %d/8  食物 %d/8"),Inventory->GetResource(TEXT("Wood")),Inventory->GetResource(TEXT("Metal")),Inventory->GetResource(TEXT("Cloth")),Inventory->GetResource(TEXT("Parts")),Inventory->GetResource(TEXT("Water")),Inventory->GetResource(TEXT("Food")));
+    const auto* Next = FRaftProgressionCatalog::Find(GetRaftLevel() + 1);
+    if (!Next || !Inventory) return TEXT("木筏已达到最高等级");
+    FString Text = FString::Printf(TEXT("%d → %d 级  %s"), GetRaftLevel(), Next->Level, *Next->ThemeName.ToString());
+    const TArray<TPair<FName,FString>> Names = {{TEXT("Wood"),TEXT("木材")},{TEXT("Rope"),TEXT("绳索")},{TEXT("Metal"),TEXT("金属")},{TEXT("Cloth"),TEXT("布料")},{TEXT("Parts"),TEXT("零件")}};
+    int32 Index = 0;
+    for (const auto& Pair : Names) if (const int32* Need = Next->UpgradeCost.Find(Pair.Key))
+    {
+        Text += FString::Printf(TEXT("%s%s %d/%d"), Index++ % 2 == 0 ? TEXT("\n") : TEXT("   "), *Pair.Value, Inventory->GetResource(Pair.Key), *Need);
+    }
+    return Text;
 }
 
 int32 ADriftsteadGameMode::GetRaftLevel() const { return RaftManager ? RaftManager->GetRaftLevel() : 1; }
@@ -96,17 +139,32 @@ int32 ADriftsteadGameMode::GetMaximumFloor() const { return RaftManager ? RaftMa
 
 bool ADriftsteadGameMode::TryUpgradeRaft(UInventoryComponent* Inventory)
 {
-    if (!RaftManager || !RaftManager->TryUpgrade(Inventory)) return false;
+    auto* Character = Cast<ADriftsteadCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0));
+    auto* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>();
+    auto* GI = Cast<UDriftsteadGameInstance>(GetGameInstance());
+    if (Quest && (!GI || !GI->IsShowcaseMode()))
+    {
+        FString Gate;
+        if (GetRaftLevel() == 2 && Quest->GetEventCount(EDriftsteadQuestStep::CollectWater) == 0) Gate = TEXT("先从雨水桶收取一次淡水，再建立菜园。");
+        if (GetRaftLevel() == 3 && Quest->GetEventCount(EDriftsteadQuestStep::HarvestCrop) == 0) Gate = TEXT("先完成一次种植与收获，再扩建二层。");
+        if (GetRaftLevel() == 4 && Quest->GetEventCount(EDriftsteadQuestStep::RepairSignal) == 0) Gate = TEXT("先登上二层修复求救信标，完成本次航程。");
+        if (!Gate.IsEmpty()) { if (Character) Character->ShowFeedback(FText::FromString(Gate), FLinearColor::Yellow); return false; }
+    }
+    if (!RaftManager || !RaftManager->TryUpgrade(Inventory))
+    {
+        if (Character) Character->ShowFeedback(FText::FromString(TEXT("资源尚未备齐，请查看右侧建造清单。")), FLinearColor::Yellow);
+        return false;
+    }
+    if (Quest && GetRaftLevel() == 3) Quest->NotifyEvent(EDriftsteadQuestStep::UpgradeLevel3);
+    DriftsteadArt::Play(this,TEXT("Build"));
     ApplyInventoryCapacityForLevel();
-    if (ADriftsteadCharacter* Character = Cast<ADriftsteadCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0)))
+    if (Character)
     {
         Character->ShowFeedback(FText::Format(NSLOCTEXT("Driftstead", "UpgradeSuccess", "木筏已升级到 {0} 级！"), FText::AsNumber(GetRaftLevel())), FLinearColor::Green);
-        if (GetRaftLevel() == 2)
-            if (UDriftsteadQuestSubsystem* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->NotifyEvent(EDriftsteadQuestStep::UpgradeLevel2);
-        if (GetRaftLevel() == 4)
-            if (UDriftsteadQuestSubsystem* Quest = GetGameInstance()->GetSubsystem<UDriftsteadQuestSubsystem>()) Quest->NotifyEvent(EDriftsteadQuestStep::UpgradeLevel4);
+        if (Quest && GetRaftLevel() == 2) Quest->NotifyEvent(EDriftsteadQuestStep::UpgradeLevel2);
+        if (Quest && GetRaftLevel() == 4) Quest->NotifyEvent(EDriftsteadQuestStep::UpgradeLevel4);
     }
-    if (UDriftsteadGameInstance* GI = Cast<UDriftsteadGameInstance>(GetGameInstance())) GI->SaveCurrentGame();
+    if (GI) GI->SaveCurrentGame();
     return true;
 }
 
@@ -158,13 +216,14 @@ void ADriftsteadGameMode::RunSmokeStep()
         Character->GetInventory()->AddTestResources(100);
         SmokeInitialDriftwood = Character->GetInventory()->CountItem(TEXT("Driftwood"));
         Character->GetHook()->SetAimDirection(FVector(0, 1, 0));
-        // Deliberately separate Z by 800 units: hook targeting is planar (X/Y)
-        // and must not miss because of the orthographic presentation height.
+        // Two targets lie along the return path at very different Z heights.
+        // Outbound flight must ignore both, reach its charged range, then the
+        // returning hook must carry both all the way back to the player.
         const FVector TargetLocation = Character->GetActorLocation() + FVector(0, 480, 800);
         ADriftItemActor* Item = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), TargetLocation, FRotator::ZeroRotator);
         if (Item) Item->ConfigureItem(TEXT("Driftwood"), FVector::ZeroVector);
         SmokeTarget = Item;
-        ADriftItemActor* Decoy = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), TargetLocation + FVector(80, 0, -1200), FRotator::ZeroRotator);
+        ADriftItemActor* Decoy = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), Character->GetActorLocation() + FVector(0, 300, -400), FRotator::ZeroRotator);
         if (Decoy) Decoy->ConfigureItem(TEXT("Driftwood"), FVector::ZeroVector);
         SmokeDecoy = Decoy;
         Character->GetHook()->StartCharging();
@@ -182,9 +241,9 @@ void ADriftsteadGameMode::RunSmokeStep()
             --SmokeStep;
             break;
         }
-        if (Character->GetInventory()->CountItem(TEXT("Driftwood")) != SmokeInitialDriftwood + 1 || IsValid(SmokeTarget) || !IsValid(SmokeDecoy))
+        if (Character->GetInventory()->CountItem(TEXT("Driftwood")) != SmokeInitialDriftwood + 2 || IsValid(SmokeTarget) || IsValid(SmokeDecoy))
         {
-            UE_LOG(LogDriftstead, Error, TEXT("DRIFTSTEAD_SMOKE FAIL: hook did not recover exactly one closest designated Driftwood"));
+            UE_LOG(LogDriftstead, Error, TEXT("DRIFTSTEAD_SMOKE FAIL: return-path hook did not recover both designated Driftwood actors"));
             bSmokeFailed = true;
         }
         if (IsValid(SmokeDecoy)) SmokeDecoy->Destroy();
@@ -288,7 +347,7 @@ void ADriftsteadGameMode::RunSmokeStep()
             }
             GI->DeleteAutomationSave();
         }
-        UE_LOG(LogDriftstead, Display, TEXT("DRIFTSTEAD_SMOKE %s: single-target planar hook recovery, inventory, levels 4/7/10, floors, passive production, facility storage and isolated save/load"), bSmokeFailed ? TEXT("FAIL") : TEXT("PASS"));
+        UE_LOG(LogDriftstead, Display, TEXT("DRIFTSTEAD_SMOKE %s: charged-range outbound and multi-target return-path recovery, inventory, levels 4/7/10, floors, passive production, facility storage and isolated save/load"), bSmokeFailed ? TEXT("FAIL") : TEXT("PASS"));
         GetWorldTimerManager().ClearTimer(SmokeTimer);
         FGenericPlatformMisc::RequestExit(false);
         break;
@@ -322,8 +381,10 @@ void ADriftsteadGameMode::RunCaptureStep()
     case 1:
     {
         Character->GetHook()->SetAimDirection(FVector(0, 1, 0));
-        ADriftItemActor* Item = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), Character->GetActorLocation() + FVector(0, 450, 65), FRotator::ZeroRotator);
-        if (Item) Item->ConfigureItem(TEXT("Driftwood"), FVector::ZeroVector);
+        ADriftItemActor* FarItem = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), Character->GetActorLocation() + FVector(0, 600, 65), FRotator::ZeroRotator);
+        if (FarItem) FarItem->ConfigureItem(TEXT("Driftwood"), FVector::ZeroVector);
+        ADriftItemActor* NearItem = GetWorld()->SpawnActor<ADriftItemActor>(ADriftItemActor::StaticClass(), Character->GetActorLocation() + FVector(0, 450, -240), FRotator::ZeroRotator);
+        if (NearItem) NearItem->ConfigureItem(TEXT("Rope"), FVector::ZeroVector);
         Character->GetHook()->StartCharging();
         break;
     }
@@ -333,9 +394,15 @@ void ADriftsteadGameMode::RunCaptureStep()
         Character->GetHook()->ReleaseHook();
         break;
     case 4:
+        if (Character->GetHook()->GetAttachedCount() < 2 && CaptureHookWaitTicks++ < 8)
+        {
+            --CaptureStep;
+            break;
+        }
         CaptureFrame(TEXT("02_HookCatch.png"));
         break;
     case 5:
+        if (Character->GetHook()->GetHookState() != EHookState::Idle) { --CaptureStep; break; }
         if (HUD) HUD->SetInventoryOpen(true);
         CaptureFrame(TEXT("03_Inventory.png"));
         break;

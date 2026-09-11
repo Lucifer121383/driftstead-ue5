@@ -16,11 +16,13 @@ public:
     virtual void BeginPlay() override;
     UFUNCTION(BlueprintCallable, Category="Spawning") void SpawnBatch(int32 Count = 8);
     UFUNCTION(BlueprintPure, Category="Spawning") int32 GetActiveCount() const;
+    void ResetOpening();
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category="Spawning") TSubclassOf<ADriftItemActor> ItemClass;
-    UPROPERTY(EditDefaultsOnly, Category="Spawning") int32 MaxActiveItems = 24;
-    UPROPERTY(EditDefaultsOnly, Category="Spawning") float SpawnInterval = 1.35f;
+    UPROPERTY(EditDefaultsOnly, Category="Spawning") int32 MaxActiveItems = 38;
+    UPROPERTY(EditDefaultsOnly, Category="Spawning") float SpawnInterval = 2.8f;
     UPROPERTY(EditDefaultsOnly, Category="Spawning") FVector2D SpawnXRange = FVector2D(-900.0f, 900.0f);
     UPROPERTY(EditDefaultsOnly, Category="Spawning") float SpawnY = 1320.0f;
     UPROPERTY(EditDefaultsOnly, Category="Spawning") float CleanupY = -1700.0f;
@@ -32,4 +34,5 @@ private:
     UPROPERTY() TArray<TObjectPtr<ADriftItemActor>> ActiveItems;
     FTimerHandle SpawnTimer;
     FTimerHandle CleanupTimer;
+    int32 SpawnSequence = 0;
 };

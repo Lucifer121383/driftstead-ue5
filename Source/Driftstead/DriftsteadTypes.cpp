@@ -60,6 +60,9 @@ FRaftLevelDefinition MakeRaft(
         if (Level >= 4) Definition.UpgradeCost.Add(TEXT("Metal"), Level - 2);
         if (Level >= 7) Definition.UpgradeCost.Add(TEXT("Parts"), Level - 5);
     }
+    if (Level == 2) Definition.UpgradeCost = {{TEXT("Wood"),18},{TEXT("Rope"),8}};
+    if (Level == 3) Definition.UpgradeCost = {{TEXT("Wood"),36},{TEXT("Rope"),14},{TEXT("Metal"),10}};
+    if (Level == 4) Definition.UpgradeCost = {{TEXT("Wood"),60},{TEXT("Rope"),22},{TEXT("Metal"),18},{TEXT("Cloth"),8}};
     return Definition;
 }
 }
@@ -92,7 +95,7 @@ const TArray<FRaftLevelDefinition>& FRaftProgressionCatalog::GetDefinitions()
         MakeRaft(1, LOCTEXT("Raft1", "漂流木台"), FIntPoint(4,4), FIntPoint::ZeroValue, FIntPoint::ZeroValue, {EFacilityType::Workbench}),
         MakeRaft(2, LOCTEXT("Raft2", "拾荒甲板"), FIntPoint(6,5), FIntPoint::ZeroValue, FIntPoint::ZeroValue, {EFacilityType::Workbench, EFacilityType::RainBarrel}),
         MakeRaft(3, LOCTEXT("Raft3", "萌芽木筏"), FIntPoint(8,6), FIntPoint::ZeroValue, FIntPoint::ZeroValue, {EFacilityType::Workbench, EFacilityType::RainBarrel, EFacilityType::FarmPlot, EFacilityType::ChickenCoop, EFacilityType::CollectionNet}),
-        MakeRaft(4, LOCTEXT("Raft4", "高脚谷仓"), FIntPoint(9,7), FIntPoint(5,4), FIntPoint::ZeroValue, {EFacilityType::Workbench, EFacilityType::RainBarrel, EFacilityType::FarmPlot, EFacilityType::ChickenCoop, EFacilityType::CollectionNet, EFacilityType::StorageLocker}),
+        MakeRaft(4, LOCTEXT("Raft4", "高脚谷仓"), FIntPoint(9,7), FIntPoint(5,4), FIntPoint::ZeroValue, {EFacilityType::Workbench, EFacilityType::RainBarrel, EFacilityType::FarmPlot, EFacilityType::ChickenCoop, EFacilityType::CollectionNet, EFacilityType::StorageLocker, EFacilityType::Lighthouse}),
         MakeRaft(5, LOCTEXT("Raft5", "海上家园"), FIntPoint(11,8), FIntPoint(7,5), FIntPoint::ZeroValue, {EFacilityType::Workbench, EFacilityType::FarmPlot, EFacilityType::ChickenCoop, EFacilityType::StorageLocker, EFacilityType::TradingDock}),
         MakeRaft(6, LOCTEXT("Raft6", "风帆牧场"), FIntPoint(13,9), FIntPoint(9,6), FIntPoint::ZeroValue, {EFacilityType::Workbench, EFacilityType::FarmPlot, EFacilityType::ChickenCoop, EFacilityType::StorageLocker, EFacilityType::WindTurbine, EFacilityType::RainBarrel}),
         MakeRaft(7, LOCTEXT("Raft7", "潮汐农塔"), FIntPoint(14,10), FIntPoint(10,7), FIntPoint(6,5), {EFacilityType::Workbench, EFacilityType::FarmPlot, EFacilityType::StorageLocker, EFacilityType::WindTurbine, EFacilityType::TradingDock}),

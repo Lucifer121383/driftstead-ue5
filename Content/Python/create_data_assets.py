@@ -28,7 +28,7 @@ RAFT_FACILITIES = [
     ["Workbench"],
     ["Workbench", "RainBarrel"],
     ["Workbench", "RainBarrel", "FarmPlot", "ChickenCoop", "CollectionNet"],
-    ["Workbench", "RainBarrel", "FarmPlot", "ChickenCoop", "CollectionNet", "StorageLocker"],
+    ["Workbench", "RainBarrel", "FarmPlot", "ChickenCoop", "CollectionNet", "StorageLocker", "Lighthouse"],
     ["Workbench", "FarmPlot", "ChickenCoop", "StorageLocker", "TradingDock"],
     ["Workbench", "FarmPlot", "ChickenCoop", "StorageLocker", "WindTurbine", "RainBarrel"],
     ["Workbench", "FarmPlot", "StorageLocker", "WindTurbine", "TradingDock"],
@@ -39,6 +39,9 @@ RAFT_FACILITIES = [
 
 
 def _upgrade_cost(level: int) -> dict[str, int]:
+    opening = {2: {"Wood":18,"Rope":8}, 3: {"Wood":36,"Rope":14,"Metal":10}, 4: {"Wood":60,"Rope":22,"Metal":18,"Cloth":8}}
+    if level in opening:
+        return opening[level]
     if level <= 1:
         return {}
     cost = {"Wood": 4 + level * 3, "Rope": 1 + level}

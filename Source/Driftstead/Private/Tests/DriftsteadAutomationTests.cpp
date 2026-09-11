@@ -5,6 +5,7 @@
 #include "../../HookComponent.h"
 #include "../../DriftsteadSaveGame.h"
 #include "../../DriftsteadTypes.h"
+#include "../../DriftsteadQuestSubsystem.h"
 
 namespace DriftsteadTests
 {
@@ -261,7 +262,10 @@ bool FHookTransitions::RunTest(const FString& Parameters)
     TestTrue(TEXT("Idle to charging"), UHookComponent::IsTransitionAllowed(EHookState::Idle, EHookState::Charging));
     TestTrue(TEXT("Charging to flying"), UHookComponent::IsTransitionAllowed(EHookState::Charging, EHookState::Flying));
     TestTrue(TEXT("Flying to attached"), UHookComponent::IsTransitionAllowed(EHookState::Flying, EHookState::Attached));
+    TestTrue(TEXT("Flying to returning"), UHookComponent::IsTransitionAllowed(EHookState::Flying, EHookState::Returning));
     TestTrue(TEXT("Attached to returning"), UHookComponent::IsTransitionAllowed(EHookState::Attached, EHookState::Returning));
+    TestTrue(TEXT("Returning to attached when salvage is caught"), UHookComponent::IsTransitionAllowed(EHookState::Returning, EHookState::Attached));
+    TestTrue(TEXT("Attached to cooldown at player recovery point"), UHookComponent::IsTransitionAllowed(EHookState::Attached, EHookState::Cooldown));
     TestTrue(TEXT("Returning to cooldown"), UHookComponent::IsTransitionAllowed(EHookState::Returning, EHookState::Cooldown));
     TestTrue(TEXT("Cooldown to idle"), UHookComponent::IsTransitionAllowed(EHookState::Cooldown, EHookState::Idle));
     TestFalse(TEXT("Idle cannot jump to attached"), UHookComponent::IsTransitionAllowed(EHookState::Idle, EHookState::Attached));
@@ -274,6 +278,68 @@ bool FSaveVersionFallback::RunTest(const FString& Parameters)
     TestTrue(TEXT("Current save version is supported"), UDriftsteadSaveGame::IsSupportedVersion(UDriftsteadSaveGame::CurrentSaveVersion));
     TestFalse(TEXT("Future/corrupt save version is rejected"), UDriftsteadSaveGame::IsSupportedVersion(999));
     TestFalse(TEXT("Zero save version is rejected"), UDriftsteadSaveGame::IsSupportedVersion(0));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpeningQuestOrder, "Driftstead.Opening.RemembersEarlyActions", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FOpeningQuestOrder::RunTest(const FString& Parameters)
+{
+    auto* Quest = NewObject<UDriftsteadQuestSubsystem>(NewObject<UGameInstance>());
+    Quest->NotifyEvent(EDriftsteadQuestStep::OpenInventory);
+    Quest->NotifyEvent(EDriftsteadQuestStep::OpenBarrel);
+    Quest->NotifyEvent(EDriftsteadQuestStep::Move);
+    Quest->NotifyEvent(EDriftsteadQuestStep::ChargeHook);
+    for (int32 I=0; I<5; ++I) Quest->NotifyEvent(EDriftsteadQuestStep::SalvageItem);
+    TestEqual(TEXT("Six real items are required"), Quest->GetCurrentStep(), EDriftsteadQuestStep::SalvageItem);
+    Quest->NotifyEvent(EDriftsteadQuestStep::SalvageItem);
+    TestEqual(TEXT("Earlier inventory and barrel lessons are remembered"), Quest->GetCurrentStep(), EDriftsteadQuestStep::UpgradeLevel2);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpeningQuestSave, "Driftstead.Opening.QuestRoundTripAndEnding", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FOpeningQuestSave::RunTest(const FString& Parameters)
+{
+    auto* Quest = NewObject<UDriftsteadQuestSubsystem>(NewObject<UGameInstance>());
+    for (const auto Step : UDriftsteadQuestSubsystem::GetSequence())
+    {
+        if (Step == EDriftsteadQuestStep::RepairSignal) continue;
+        for (int32 I=0; I<(Step==EDriftsteadQuestStep::SalvageItem?6:1); ++I) Quest->NotifyEvent(Step);
+    }
+    TestFalse(TEXT("Second floor is not the ending until signal is repaired"), Quest->IsComplete());
+    auto* Restored = NewObject<UDriftsteadQuestSubsystem>(NewObject<UGameInstance>());
+    Restored->RestoreEvents(Quest->GetEventCounts());
+    TestEqual(TEXT("Progress restored"), Restored->GetCompletedObjectives(), 11);
+    Restored->NotifyEvent(EDriftsteadQuestStep::RepairSignal);
+    TestTrue(TEXT("Signal completes the first voyage"), Restored->IsComplete());
+    Restored->ResetQuest();
+    TestEqual(TEXT("New voyage resets all chapter progress"), Restored->GetCompletedObjectives(), 0);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FResourceSupply100, "Driftstead.Resources.SupplyAllNineBy100", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FResourceSupply100::RunTest(const FString& Parameters)
+{
+    auto* Inventory = DriftsteadTests::NewInventory(1, 1);
+    Inventory->TryAddItem(TEXT("Rope"));
+    Inventory->TryAddItem(TEXT("FoodCrate"));
+    const int32 EntryCount = Inventory->GetEntries().Num();
+    const int32 BasketCount = Inventory->GetRecoveryBasket().Num();
+    const TArray<FName> Resources = {TEXT("Wood"), TEXT("Rope"), TEXT("Metal"), TEXT("Cloth"), TEXT("Seeds"), TEXT("Food"), TEXT("Water"), TEXT("Parts"), TEXT("Power")};
+    TMap<FName, int32> Before;
+    for (int32 Index = 0; Index < Resources.Num(); ++Index)
+    {
+        Inventory->AddResource(Resources[Index], Index * 7);
+        Before.Add(Resources[Index], Inventory->GetResource(Resources[Index]));
+    }
+    for (int32 Press = 1; Press <= 2; ++Press)
+    {
+        Inventory->AddTestResources(100);
+        for (FName Resource : Resources)
+            TestEqual(FString::Printf(TEXT("Grant %d adds exactly 100 to %s"), Press, *Resource.ToString()), Inventory->GetResource(Resource), Before[Resource] + Press * 100);
+    }
+    TestEqual(TEXT("All nine resources exist"), Inventory->GetResources().Num(), 9);
+    TestEqual(TEXT("Supply does not fill inventory slots"), Inventory->GetEntries().Num(), EntryCount);
+    TestEqual(TEXT("Full bag does not redirect supply into recovery basket"), Inventory->GetRecoveryBasket().Num(), BasketCount);
     return true;
 }
 

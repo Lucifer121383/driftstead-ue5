@@ -11,7 +11,7 @@ class DRIFTSTEAD_API UDriftsteadSaveGame : public USaveGame
     GENERATED_BODY()
 
 public:
-    static constexpr int32 CurrentSaveVersion = 2;
+    static constexpr int32 CurrentSaveVersion = 3;
     static bool IsSupportedVersion(int32 Version) { return Version >= 1 && Version <= CurrentSaveVersion; }
 
     UPROPERTY() int32 SaveVersion = CurrentSaveVersion;
@@ -29,4 +29,5 @@ public:
     UPROPERTY() TArray<FFacilitySaveState> FacilityStates;
     UPROPERTY() EDriftsteadQuestStep CurrentQuest = EDriftsteadQuestStep::Move;
     UPROPERTY() bool bTutorialComplete = false;
+    UPROPERTY() TMap<EDriftsteadQuestStep, int32> QuestEvents;
 };

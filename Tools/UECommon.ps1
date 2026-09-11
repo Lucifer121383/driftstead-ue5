@@ -185,6 +185,7 @@ function Stop-UnrealEditorProcesses {
 
     $safeProcessIds = @()
     foreach ($process in $processes) {
+        if ($process.HasExited) { continue }
         $commandLine = $null
         try {
             $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$($process.Id)").CommandLine
@@ -193,6 +194,7 @@ function Stop-UnrealEditorProcesses {
         }
         $isThisProject = $commandLine -and $commandLine.IndexOf($UProjectPath, [StringComparison]::OrdinalIgnoreCase) -ge 0
         if ([string]::IsNullOrWhiteSpace($commandLine)) {
+            if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) { continue }
             throw "Cannot inspect the command line for Unreal Editor PID $($process.Id); refusing to close it."
         }
         $isProjectBrowser = $commandLine -match '(?i)-ProjectBrowser' -or $commandLine -notmatch '(?i)\.uproject'
@@ -204,6 +206,7 @@ function Stop-UnrealEditorProcesses {
     }
 
     $safeProcesses = @($processes | Where-Object { $_.Id -in $safeProcessIds })
+    if ($safeProcesses.Count -eq 0) { return }
     Write-Host "Closing $($safeProcesses.Count) empty/current-project Unreal Editor process(es) before compiling C++ modules."
     foreach ($process in $safeProcesses) {
         [void]$process.CloseMainWindow()

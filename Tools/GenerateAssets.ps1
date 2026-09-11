@@ -37,4 +37,5 @@ if ($pythonErrors.Count -gt 0) {
     throw "Editor asset generation logged an error at line $($first.LineNumber): $($first.Line). Full log: $stableLog"
 }
 
-Write-Host 'Editor assets generated and saved successfully.'
+& (Join-Path $PSScriptRoot 'GenerateInventoryIcons.ps1') -ProjectPath $uproject -EngineRoot $engine
+Write-Host 'Editor assets and inventory icons generated, saved and validated successfully.'

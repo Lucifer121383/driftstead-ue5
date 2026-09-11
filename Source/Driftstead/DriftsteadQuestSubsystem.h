@@ -19,10 +19,17 @@ public:
     UFUNCTION(BlueprintPure, Category="Quest") EDriftsteadQuestStep GetCurrentStep() const { return CurrentStep; }
     UFUNCTION(BlueprintPure, Category="Quest") bool IsComplete() const { return bComplete; }
     UFUNCTION(BlueprintPure, Category="Quest") FText GetCurrentInstruction() const;
+    UFUNCTION(BlueprintPure, Category="Quest") int32 GetEventCount(EDriftsteadQuestStep Event) const { return EventCounts.FindRef(Event); }
+    UFUNCTION(BlueprintPure, Category="Quest") int32 GetCompletedObjectives() const;
+    const TMap<EDriftsteadQuestStep, int32>& GetEventCounts() const { return EventCounts; }
+    void RestoreEvents(const TMap<EDriftsteadQuestStep, int32>& SavedEvents);
+    static const TArray<EDriftsteadQuestStep>& GetSequence();
 
     UPROPERTY(BlueprintAssignable) FQuestStepChangedSignature OnQuestStepChanged;
 
 private:
+    void RefreshProgress();
+    UPROPERTY() TMap<EDriftsteadQuestStep, int32> EventCounts;
     UPROPERTY() EDriftsteadQuestStep CurrentStep = EDriftsteadQuestStep::Move;
     UPROPERTY() bool bComplete = false;
 };

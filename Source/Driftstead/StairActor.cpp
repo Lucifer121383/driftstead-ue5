@@ -3,6 +3,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "UObject/ConstructorHelpers.h"
+#include "DemoArt.h"
 
 AStairActor::AStairActor()
 {
@@ -26,6 +27,8 @@ void AStairActor::Configure(int32 InFromFloor, int32 InToFloor)
 {
     FromFloor = InFromFloor;
     ToFloor = InToFloor;
+    StairMesh->SetRelativeRotation(FRotator::ZeroRotator);
+    DriftsteadArt::Fit(StairMesh,TEXT("DeckStairs"),205,FVector(0,0,-30));
 #if WITH_EDITOR
     SetActorLabel(FString::Printf(TEXT("Stair_Floor%d_to_%d"), FromFloor + 1, ToFloor + 1));
 #endif

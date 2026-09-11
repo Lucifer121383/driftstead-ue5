@@ -22,6 +22,8 @@ public:
     UFUNCTION(BlueprintCallable, Category="Drift Item") void ConfigureItem(FName NewItemId, FVector NewDriftVelocity);
     UFUNCTION(BlueprintPure, Category="Drift Item") FName GetItemId() const { return ItemId; }
     UFUNCTION(BlueprintCallable, Category="Drift Item") void PrepareForRecovery();
+    bool IsCaught() const { return bCaught; }
+    void ReleaseFromHook();
 
     virtual bool CanBeCaught_Implementation(float HookCapacity) const override;
     virtual float GetCatchWeight_Implementation() const override;

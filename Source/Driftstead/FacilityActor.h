@@ -24,6 +24,8 @@ public:
     UFUNCTION(BlueprintPure, Category="Facility") EFacilityType GetFacilityType() const { return FacilityType; }
     FFacilitySaveState CaptureSaveState() const;
     void RestoreSaveState(const FFacilitySaveState& State);
+    FText FacilityName() const;
+    bool TryUpgrade(ADriftsteadCharacter* Character);
 
     virtual bool Interact_Implementation(ADriftsteadCharacter* Character) override;
     virtual FText GetInteractionPrompt_Implementation() const override;
@@ -33,6 +35,7 @@ protected:
     UPROPERTY(VisibleAnywhere) TObjectPtr<UBoxComponent> InteractionBounds;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> BodyMesh;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> AccentMesh;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> SignalGlow;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UInventoryComponent> StorageInventory;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Facility") EFacilityType FacilityType = EFacilityType::Workbench;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Facility") int32 FloorIndex = 0;
@@ -47,8 +50,8 @@ private:
     void PerformProduction();
     void FinishFarmProduction();
     void RunAutoCrane();
-    FText FacilityName() const;
     FTimerHandle ProductionTimer;
     FTimerHandle FarmTimer;
     float VisualTime = 0.0f;
+    bool bSignalLit = false;
 };

@@ -14,6 +14,9 @@ def main() -> None:
 
     modules = (
         "create_materials",
+        "import_demo_art",
+        "create_signature_meshes",
+        "create_demo_audio",
         "create_blueprints",
         "create_data_assets",
         "create_demo_map",
@@ -23,7 +26,12 @@ def main() -> None:
         unreal.log(f"[Driftstead] Running {module_name}")
         module = importlib.import_module(module_name)
         importlib.reload(module)
-        module.main()
+        # Icon portraits need real render frames in a second, dedicated process.
+        # GenerateAssets.ps1 runs that stage, then full validation including icons.
+        if module_name == "validate_content":
+            module.main(require_icons=False)
+        else:
+            module.main()
 
     unreal.EditorAssetLibrary.save_directory("/Game/Driftstead", only_if_is_dirty=True, recursive=True)
     unreal.log("[Driftstead] Bootstrap completed successfully.")

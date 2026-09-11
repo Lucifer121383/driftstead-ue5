@@ -25,12 +25,11 @@ public:
     UFUNCTION(BlueprintCallable, Category="Hook") void RecallHook();
     UFUNCTION(BlueprintCallable, Category="Hook") void SetAimDirection(FVector NewDirection);
     UFUNCTION(BlueprintPure, Category="Hook") EHookState GetHookState() const { return State; }
+    UFUNCTION(BlueprintPure, Category="Hook") int32 GetAttachedCount() const { return AttachedActors.Num(); }
     UFUNCTION(BlueprintPure, Category="Hook") float GetChargeAlpha() const;
     UFUNCTION(BlueprintPure, Category="Hook") FVector GetEstimatedLandingPoint() const;
     UFUNCTION(BlueprintPure, Category="Hook") FVector GetRopeOrigin() const;
     UFUNCTION(BlueprintPure, Category="Hook") static bool IsTransitionAllowed(EHookState From, EHookState To);
-
-    void NotifyHookOverlap(AActor* OtherActor);
 
     UPROPERTY(BlueprintAssignable, Category="Hook") FHookStateChangedSignature OnHookStateChanged;
 
@@ -40,25 +39,28 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category="Hook") float MinimumRange = 350.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook") float MaximumRange = 1250.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook") float FlightSpeed = 1200.0f;
-    UPROPERTY(EditDefaultsOnly, Category="Hook") float ReturnSpeed = 1550.0f;
+    UPROPERTY(EditDefaultsOnly, Category="Hook") float ReturnSpeed = 780.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook") float HookCapacity = 6.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook|Catching", meta=(ClampMin="1.0")) float PlanarCatchRadius = 95.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook|Catching", meta=(ClampMin="1.0")) float PlanarCatchHalfHeight = 1200.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook|Catching") float CatchPlaneHeight = 55.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook|Catching", meta=(ClampMin="1.0")) float CatchPlaneApproachSpeed = 650.0f;
+    UPROPERTY(EditDefaultsOnly, Category="Hook|Catching") float RecoveryPointVerticalOffset = -78.0f;
     UPROPERTY(EditDefaultsOnly, Category="Hook") TSubclassOf<AHookActor> HookActorClass;
 
 private:
     void SetState(EHookState NewState);
-    void BeginReturn(bool bHitSomething);
+    void BeginReturn();
     void FinishReturn();
     void EnterIdle();
-    void TryCatchAlongFlightPath(const FVector& Start, const FVector& End);
+    void TryCatchAlongReturnPath(const FVector& Start, const FVector& End);
+    void TryAttachCatchable(AActor* OtherActor);
     void NotifyPlayer(const FText& Message, FLinearColor Color) const;
 
     UPROPERTY(VisibleInstanceOnly, Category="Hook") EHookState State = EHookState::Idle;
     UPROPERTY() TObjectPtr<AHookActor> ActiveHook;
-    UPROPERTY() TObjectPtr<AActor> AttachedActor;
+    UPROPERTY() TArray<TObjectPtr<AActor>> AttachedActors;
+    TSet<TWeakObjectPtr<AActor>> RejectedActors;
     FVector AimDirection = FVector::ForwardVector;
     FVector FlightDirection = FVector::ForwardVector;
     FVector LaunchOrigin = FVector::ZeroVector;

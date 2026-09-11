@@ -2,6 +2,7 @@
 #include "DriftItemActor.h"
 #include "DriftsteadTypes.h"
 #include "TimerManager.h"
+#include "DriftsteadGameMode.h"
 
 ADriftItemSpawner::ADriftItemSpawner()
 {
@@ -12,9 +13,23 @@ ADriftItemSpawner::ADriftItemSpawner()
 void ADriftItemSpawner::BeginPlay()
 {
     Super::BeginPlay();
-    SpawnBatch(10);
+    ResetOpening();
     GetWorldTimerManager().SetTimer(SpawnTimer, this, &ADriftItemSpawner::SpawnOne, SpawnInterval, true);
     GetWorldTimerManager().SetTimer(CleanupTimer, this, &ADriftItemSpawner::CleanupItems, 2.0f, true);
+}
+
+void ADriftItemSpawner::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    GetWorldTimerManager().ClearAllTimersForObject(this);
+    for (ADriftItemActor* Item : ActiveItems) if (IsValid(Item) && !Item->IsCaught()) Item->Destroy();
+    Super::EndPlay(EndPlayReason);
+}
+
+void ADriftItemSpawner::ResetOpening()
+{
+    for (ADriftItemActor* Item : ActiveItems) if (IsValid(Item) && !Item->IsCaught()) Item->Destroy();
+    ActiveItems.Reset(); SpawnSequence = 0;
+    SpawnBatch(12);
 }
 
 int32 ADriftItemSpawner::GetActiveCount() const
@@ -34,17 +49,26 @@ void ADriftItemSpawner::SpawnOne()
     CleanupItems();
     if (GetActiveCount() >= MaxActiveItems) return;
 
-    const FVector Location(FMath::FRandRange(SpawnXRange.X, SpawnXRange.Y), SpawnY + FMath::FRandRange(-120.0f, 180.0f), 45.0f);
+    const ADriftsteadGameMode* GM = GetWorld()->GetAuthGameMode<ADriftsteadGameMode>();
+    const int32 Level = GM ? GM->GetRaftLevel() : 1;
+    const float Edge = Level < 3 ? 450.0f : 690.0f;
+    const float Angle = FMath::DegreesToRadians(FMath::FRandRange(15.0f, 165.0f));
+    const float Radius = FMath::FRandRange(Edge + 100.0f, Edge + 510.0f);
+    const FVector Location(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius + 200.0f, 35.0f);
     ADriftItemActor* Item = GetWorld()->SpawnActor<ADriftItemActor>(ItemClass, Location, FRotator::ZeroRotator);
     if (!Item) return;
-    const FDriftItemDefinition* Definition = FDriftsteadItemCatalog::Find(ChooseWeightedItem());
+    // A repeating supply manifest guarantees essentials and barrels without
+    // making the tutorial depend on lucky random rolls.
+    static const TArray<FName> Manifest = {TEXT("Driftwood"),TEXT("Rope"),TEXT("Driftwood"),TEXT("ScrapMetal"),TEXT("Rope"),TEXT("Cloth"),TEXT("SealedBarrel"),TEXT("SeedCrate"),TEXT("Driftwood"),TEXT("Rope"),TEXT("FoodCrate"),TEXT("Electronics")};
+    const FName Id = Manifest[SpawnSequence++ % Manifest.Num()];
+    const FDriftItemDefinition* Definition = FDriftsteadItemCatalog::Find(Id);
     if (!Definition)
     {
         Item->Destroy();
         return;
     }
-    const float Speed = FMath::FRandRange(Definition->DriftSpeedRange.X, Definition->DriftSpeedRange.Y);
-    Item->ConfigureItem(Definition->ItemId, FVector(0.0f, -Speed, 0.0f));
+    const float Speed = FMath::FRandRange(18.0f, 28.0f);
+    Item->ConfigureItem(Definition->ItemId, FVector(8.0f, -Speed, 0.0f));
     ActiveItems.Add(Item);
 }
 
@@ -57,7 +81,7 @@ void ADriftItemSpawner::CleanupItems()
         {
             ActiveItems.RemoveAtSwap(Index);
         }
-        else if (Item->GetActorLocation().Y < CleanupY)
+        else if (!Item->IsCaught() && Item->GetActorLocation().Y < CleanupY)
         {
             Item->Destroy();
             ActiveItems.RemoveAtSwap(Index);

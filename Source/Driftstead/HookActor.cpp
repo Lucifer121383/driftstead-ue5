@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
+#include "DemoArt.h"
 
 AHookActor::AHookActor()
 {
@@ -12,8 +13,8 @@ AHookActor::AHookActor()
     Collision = CreateDefaultSubobject<USphereComponent>(TEXT("HookCollision"));
     Collision->InitSphereRadius(56.0f);
     Collision->SetCollisionObjectType(ECC_WorldDynamic);
-    // Catch selection is centralized in UHookComponent's planar sweep so a
-    // frame with several overlaps still resolves exactly one closest target.
+    // Catch selection is centralized in UHookComponent's return-path planar
+    // sweep so outbound overlaps never trigger an early recall.
     Collision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     Collision->SetCollisionResponseToAllChannels(ECR_Ignore);
     SetRootComponent(Collision);
@@ -42,6 +43,7 @@ AHookActor::AHookActor()
 void AHookActor::InitializeHook(UHookComponent* InOwnerComponent)
 {
     OwnerComponent = InOwnerComponent;
+    DriftsteadArt::Fit(HookMesh, TEXT("GrapplingHook"), 72, FVector(0,0,-34));
 }
 
 void AHookActor::Tick(float DeltaSeconds)
